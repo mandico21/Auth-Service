@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Mapping, Self
 
 from pydantic import BaseModel as _PydanticBaseModel, SecretBytes, SecretStr, ConfigDict

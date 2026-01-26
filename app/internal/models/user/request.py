@@ -1,5 +1,5 @@
 """Request модели для User API."""
-
+from app.internal.models.user.base import UserFields
 from app.pkg.models.base import BaseModel
 from app.pkg.models.types import NotEmptyStr
 
@@ -7,8 +7,8 @@ from app.pkg.models.types import NotEmptyStr
 class CreateUserRequest(BaseModel):
     """Запрос на создание пользователя."""
 
-    email: str
-    name: NotEmptyStr
+    email: UserFields.Email
+    name: UserFields.Name
 
 
 class UpdateUserRequest(BaseModel):
