@@ -46,25 +46,11 @@ Server runs at `http://localhost:8000`
 
 ## Production Deployment
 
-### With uvicorn workers:
 ```bash
 make run-prod
 # or
 uvicorn app.main:create_app --host 0.0.0.0 --port 8000 --workers 4
 ```
-
-### With gunicorn (recommended):
-```bash
-make run-gunicorn
-# or
-gunicorn app.main:create_app \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --workers 4 \
-    --bind 0.0.0.0:8000 \
-    --timeout 30 \
-    --graceful-timeout 30
-```
-Use `--graceful-timeout` equal to or greater than `API__GRACEFUL_SHUTDOWN_TIMEOUT` so workers can close connectors before being killed.
 
 ### Connection limits (multi-worker)
 With multiple workers, total DB/Redis connections = **workers × (POSTGRES__MAX_CONNECTION + REDIS__MAX_CONNECTIONS)** per instance. Example: 4 workers, `MAX_CONNECTION=20`, `REDIS__MAX_CONNECTIONS=10` → up to 80 Postgres + 40 Redis connections. Set server-side limits (e.g. `max_connections` in Postgres) accordingly.
@@ -116,7 +102,7 @@ Environment variables (prefix with section name, e.g., `POSTGRES__HOST`):
 | `API__WORKERS` | `1` | Number of workers |
 | `API__DEBUG` | `false` | Enable debug mode (enables /docs) |
 | `API__REQUEST_TIMEOUT` | `30` | Request timeout in seconds |
-| `API__GRACEFUL_SHUTDOWN_TIMEOUT` | `30` | Max seconds to wait for connector shutdown on exit; gunicorn `--graceful-timeout` should be ≥ this value |
+| `API__GRACEFUL_SHUTDOWN_TIMEOUT` | `30` | Max seconds to wait for connector shutdown on exit |
 
 ### PostgreSQL Settings
 | Variable | Default | Description |

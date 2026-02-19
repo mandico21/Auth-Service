@@ -21,10 +21,6 @@ run:
 run-prod:
 	uvicorn app.main:create_app --host $(API__HOST) --port $(API__PORT) --workers $(API__WORKERS) --no-access-log --log-config logging_config.json
 
-## Run with gunicorn (recommended for production)
-run-gunicorn:
-	gunicorn app.main:create_app --worker-class uvicorn.workers.UvicornWorker --workers $(API__WORKERS) --bind $(API__HOST):$(API__PORT) --timeout $(API__REQUEST_TIMEOUT) --graceful-timeout $(API__GRACEFUL_SHUTDOWN_TIMEOUT) --log-config logging_config.json
-
 ## Format all
 fmt: format
 format: remove_imports isort black docformatter add-trailing-comma
@@ -174,7 +170,6 @@ help:
 	@echo "  === Server ==="
 	@echo "  run           - Run development server with reload"
 	@echo "  run-prod      - Run production server with workers"
-	@echo "  run-gunicorn  - Run with gunicorn (recommended for production)"
 	@echo ""
 	@echo "  === Testing ==="
 	@echo "  test          - Run all tests"
