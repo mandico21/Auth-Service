@@ -33,6 +33,7 @@ class TestHealthEndpoints:
         data = response.json()
         assert "status" in data
         assert "postgres" in data
+        assert "redis" in data
 
 
 @pytest.mark.integration

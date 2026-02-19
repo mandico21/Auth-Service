@@ -27,6 +27,7 @@ from app.configuration.providers import (
 )
 from app.main import create_app
 from app.pkg.connectors.postgres import PostgresConnector
+from app.pkg.connectors.redis import RedisConnector
 from app.pkg.settings import Settings, get_settings
 
 
@@ -201,9 +202,19 @@ async def container() -> AsyncGenerator[AsyncContainer, None]:
     await container.close()
 
 
+@pytest.fixture
+def mock_redis_connector() -> AsyncMock:
+    """Мок RedisConnector для unit тестов."""
+    connector = AsyncMock(spec=RedisConnector)
+    connector.healthcheck.return_value = True
+    connector.pool_stats = {"status": "disabled"}
+    return connector
+
+
 @pytest_asyncio.fixture
 async def mock_container(
     mock_postgres_connector: AsyncMock,
+    mock_redis_connector: AsyncMock,
 ) -> AsyncGenerator[AsyncContainer, None]:
     """
     Dishka контейнер с моками для unit тестов.
@@ -217,11 +228,16 @@ async def mock_container(
         def postgres_connector(self) -> PostgresConnector:
             return mock_postgres_connector
 
+        @provide(scope=Scope.APP)
+        def redis_connector(self) -> RedisConnector:
+            return mock_redis_connector
+
     container = make_async_container(
         SettingsProvider(),
         MockConnectorsProvider(),
         RepositoryProvider(),
         ServiceProvider(),
+        ClientProvider(),
     )
 
     yield container

@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Any, AsyncIterator, Callable, Generic, Sequence, TypeVar
 
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, InterfaceError, OperationalError
 
 from app.pkg.connectors.postgres import PostgresConnector
 from app.pkg.logger import get_logger
@@ -19,20 +19,25 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 
 
+# Транзиентные ошибки БД (соединение, таймаут, deadlock) — повторяем; IntegrityError и т.п. не повторяем.
+_DEFAULT_RETRY_EXCEPTIONS: tuple = (OperationalError, InterfaceError)
+
+
 def with_retry(
     max_attempts: int = 3,
     delay: float = 0.1,
     backoff: float = 2.0,
-    exceptions: tuple = (Exception,),
+    exceptions: tuple = _DEFAULT_RETRY_EXCEPTIONS,
 ):
     """
     Декоратор для повторных попыток операций с БД с экспоненциальной задержкой.
+    По умолчанию повторяет только транзиентные ошибки (OperationalError, InterfaceError).
 
     Аргументы:
         max_attempts: Максимальное количество попыток
         delay: Начальная задержка между попытками в секундах
         backoff: Множитель задержки после каждой попытки
-        exceptions: Кортеж исключений для перехвата и повтора
+        exceptions: Кортеж исключений для перехвата и повтора (по умолчанию — только транзиентные)
     """
 
     def decorator(func: Callable) -> Callable:

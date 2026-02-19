@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from dishka import FromDishka, make_async_container
@@ -23,6 +25,7 @@ from app.internal.pkg.middlewares.request_id import RequestIdMiddleware
 from app.internal.pkg.middlewares.timeout import TimeoutMiddleware
 from app.internal.routes import register_routes
 from app.pkg.connectors.postgres import PostgresConnector
+from app.pkg.connectors.redis import RedisConnector
 from app.pkg.logger import get_logger
 from app.pkg.settings import get_settings
 
@@ -68,13 +71,40 @@ def create_app() -> FastAPI:
         ClientProvider(),
     )
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Eager startup: создаём коннекторы до приёма трафика (пулы готовы к первому запросу)
+        if hasattr(app.state, "dishka_container"):
+            container = app.state.dishka_container
+            async with container() as scope:
+                await scope.get(PostgresConnector)
+                await scope.get(RedisConnector)
+            logger.info("Connectors started (Postgres, Redis)")
+
+        yield
+
+        # Graceful shutdown с таймаутом (избегаем зависания при «залипших» соединениях)
+        if hasattr(app.state, "dishka_container"):
+            container = app.state.dishka_container
+            timeout = settings.API.GRACEFUL_SHUTDOWN_TIMEOUT
+            try:
+                await asyncio.wait_for(container.close(), timeout=timeout)
+                logger.info("Dishka container closed (connectors and clients shut down)")
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Dishka container close exceeded timeout=%ds; forcing exit",
+                    timeout,
+                )
+
     # Создаём FastAPI приложение
     application = FastAPI(
         title=settings.API.INSTANCE_APP_NAME,
         debug=settings.API.DEBUG,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
+    application.state.dishka_container = container
 
     # Настраиваем Dishka DI
     setup_dishka(container, application)
@@ -123,10 +153,12 @@ def create_app() -> FastAPI:
     @application.get("/health/readiness", tags=["health"])
     async def readiness(
         postgres: Annotated[PostgresConnector, FromDishka()],
+        redis: Annotated[RedisConnector, FromDishka()],
     ):
-        """Readiness проба - проверяет все зависимости."""
+        """Readiness проба - проверяет все зависимости (Postgres, Redis при включении)."""
         checks = {
             "postgres": await postgres.healthcheck(),
+            "redis": await redis.healthcheck(),
         }
         all_ok = all(checks.values())
         return {
@@ -137,13 +169,20 @@ def create_app() -> FastAPI:
     @application.get("/health/detailed", tags=["health"])
     async def detailed_health(
         postgres: Annotated[PostgresConnector, FromDishka()],
+        redis: Annotated[RedisConnector, FromDishka()],
     ):
-        """Детальная проверка здоровья со статистикой пула."""
+        """Детальная проверка здоровья со статистикой пулов."""
+        postgres_ok = await postgres.healthcheck()
+        redis_ok = await redis.healthcheck()
         return {
-            "status": "ok" if await postgres.healthcheck() else "degraded",
+            "status": "ok" if (postgres_ok and redis_ok) else "degraded",
             "postgres": {
-                "healthy": await postgres.healthcheck(),
+                "healthy": postgres_ok,
                 "pool": postgres.pool_stats,
+            },
+            "redis": {
+                "healthy": redis_ok,
+                "pool": redis.pool_stats,
             },
         }
 

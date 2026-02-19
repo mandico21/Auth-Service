@@ -100,6 +100,26 @@ class PostgresSettings(_Settings):
         return values
 
 
+class RedisSettings(_Settings):
+    """
+    Optional Redis settings. When ENABLED=False, Redis connector is a no-op
+    (healthcheck returns True, connect is not used).
+
+    Номер логической базы Redis задаётся в URL: путь после порта — /0, /1, … (0–15 по умолчанию).
+    Примеры: redis://localhost:6379/0, redis://:pass@host:6379/2, rediss://host:6380/1.
+    """
+
+    ENABLED: bool = False
+    URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection URL; path segment is logical DB index (e.g. /0, /1)",
+    )
+    SOCKET_TIMEOUT: float = Field(default=5.0, ge=0.1, description="Socket timeout in seconds")
+    SOCKET_CONNECT_TIMEOUT: float = Field(default=5.0, ge=0.1, description="Socket connect timeout in seconds")
+    MAX_CONNECTIONS: PositiveInt = Field(default=10, description="Max connections in pool")
+    DECODE_RESPONSES: bool = True
+
+
 class Settings(_Settings):
     """
     Корень конфигурации. Читает .env один раз (см. lru_cache ниже).
@@ -110,6 +130,7 @@ class Settings(_Settings):
 
     API: APISettings = APISettings()
     POSTGRES: PostgresSettings
+    REDIS: RedisSettings = Field(default_factory=RedisSettings)
 
 
 @lru_cache()
