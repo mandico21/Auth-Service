@@ -17,6 +17,10 @@ docker_up:
 run:
 	uvicorn app.main:create_app --factory --host $(API__HOST) --reload --port $(API__PORT) --log-config logging_config.json
 
+## Run development server with reload (alternative via Python script)
+run-dev:
+	uv run python run.py
+
 ## Run production server with multiple workers
 run-prod:
 	uvicorn app.main:create_app --factory --host $(API__HOST) --port $(API__PORT) --workers $(API__WORKERS) --no-access-log --log-config logging_config.json

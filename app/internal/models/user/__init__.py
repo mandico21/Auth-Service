@@ -1,7 +1,14 @@
-"""Модели для работы с пользователями."""
+__all__ = ["UserFields"]
 
-from app.pkg.models.base import BaseModel
+from typing import Annotated
 
-# Экспортируйте ваши модели здесь:
-# from app.internal.models.user.request import CreateUserRequest, UpdateUserRequest
-# from app.internal.models.user.response import UserResponse, UserListResponse
+from pydantic import Field
+
+
+class UserFields:
+    ID = Annotated[int, Field(description="ID пользователя", examples=[1])]
+    Name = Annotated[
+        str, Field(description="Имя пользователя", max_length=100, examples=["Иван Иванов"])]
+    Email = Annotated[str, Field(
+        description="Email пользователя", max_length=100, examples=["example@gmail.com"]
+    )]

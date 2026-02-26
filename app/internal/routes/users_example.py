@@ -6,7 +6,7 @@ from uuid import UUID
 from dishka import FromDishka
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.internal.models.user.response import UserListResponse, UserResponse
+from app.internal.models.user.repository import UserListResponse, UserResponse
 from app.internal.repository.postgres import UserRepository
 from app.pkg.models.base import NotFoundError
 

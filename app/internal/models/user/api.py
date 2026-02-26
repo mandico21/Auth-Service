@@ -1,5 +1,5 @@
 """Request модели для User API."""
-from app.internal.models.user.base import UserFields
+from app.internal.models.user import UserFields
 from app.pkg.models.base import BaseModel
 from app.pkg.models.types import NotEmptyStr
 
