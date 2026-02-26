@@ -45,7 +45,7 @@
 
 ### 2.6 Масштабируемость
 
-- Stateless API: горизонтальное масштабирование за счёт нескольких воркеров (uvicorn/gunicorn).
+- Stateless API: горизонтальное масштабирование за счёт нескольких воркеров (uvicorn).
 - Пул соединений на процесс: при росте числа воркеров лимиты БД/Redis задаются через `POSTGRES__MAX_CONNECTION` и `REDIS__MAX_CONNECTIONS`; параметры вынесены в настройки.
 
 ---
@@ -80,7 +80,7 @@
 - Ограничить время shutdown, например:
   - `async with asyncio.timeout(settings.API.GRACEFUL_SHUTDOWN_TIMEOUT): await app.state.dishka_container.close()` (Python 3.11+),
   - или `await asyncio.wait_for(app.state.dishka_container.close(), timeout=settings.API.GRACEFUL_SHUTDOWN_TIMEOUT)` с обработкой `asyncio.TimeoutError` и логированием.
-- В README и в примере gunicorn указать использование `--graceful-timeout` в соответствии с `GRACEFUL_SHUTDOWN_TIMEOUT`.
+- В README описать использование `GRACEFUL_SHUTDOWN_TIMEOUT` при остановке приложения.
 
 ### 3.4 Redis: зависимость от внутренней структуры пула
 
@@ -121,7 +121,7 @@
 
 ### 3.8 Многопроцессность и пулы (документирование)
 
-**Проблема:** При запуске с несколькими воркерами (gunicorn/uvicorn workers) каждый процесс создаёт свой пул Postgres и Redis. Суммарное число соединений = `workers × (POSTGRES__MAX_CONNECTION + REDIS__MAX_CONNECTIONS + …)`. Без явного указания в документации легко превысить лимиты БД/Redis.
+**Проблема:** При запуске с несколькими воркерами (uvicorn workers) каждый процесс создаёт свой пул Postgres и Redis. Суммарное число соединений = `workers × (POSTGRES__MAX_CONNECTION + REDIS__MAX_CONNECTIONS + …)`. Без явного указания в документации легко превысить лимиты БД/Redis.
 
 **Рекомендации:**
 
@@ -167,7 +167,7 @@
 5. **with_retry:** перехватывать только транзиентные исключения БД (например, `OperationalError`, ошибки соединения).
 6. **BaseApiClient:** опциональный retry с backoff и ограничением по статусам/методам; документировать использование.
 7. **Redis pool_stats:** не полагаться на стабильность приватных атрибутов; при возможности использовать публичный API или изолировать в try/except и тестах.
-8. **Документация:** в README и .env.example описать расчёт соединений при нескольких воркерах и использование `GRACEFUL_SHUTDOWN_TIMEOUT` и gunicorn `--graceful-timeout`.
+8. **Документация:** в README и .env.example описать расчёт соединений при нескольких воркерах и использование `GRACEFUL_SHUTDOWN_TIMEOUT`.
 
 ---
 

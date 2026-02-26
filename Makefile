@@ -15,11 +15,11 @@ docker_up:
 
 ## Run development server with reload
 run:
-	uvicorn app.main:create_app --host $(API__HOST) --reload --port $(API__PORT) --log-config logging_config.json
+	uvicorn app.main:create_app --factory --host $(API__HOST) --reload --port $(API__PORT) --log-config logging_config.json
 
 ## Run production server with multiple workers
 run-prod:
-	uvicorn app.main:create_app --host $(API__HOST) --port $(API__PORT) --workers $(API__WORKERS) --no-access-log --log-config logging_config.json
+	uvicorn app.main:create_app --factory --host $(API__HOST) --port $(API__PORT) --workers $(API__WORKERS) --no-access-log --log-config logging_config.json
 
 ## Format all
 fmt: format
