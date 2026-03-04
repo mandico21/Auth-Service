@@ -1,11 +1,16 @@
 """User репозиторий для PostgreSQL."""
 
+import re
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from app.internal.repository.base import BaseRepository, with_retry
 from app.pkg.connectors.postgres import PostgresConnector
+
+# Допустимые поля для сортировки
+_ALLOWED_ORDER_FIELDS = {"created_at", "updated_at", "email", "name"}
+_ALLOWED_ORDER_DIRECTIONS = {"ASC", "DESC"}
 
 
 class UserRepository(BaseRepository):
@@ -17,6 +22,21 @@ class UserRepository(BaseRepository):
     @property
     def table_name(self) -> str:
         return "users"
+
+    @staticmethod
+    def _validate_order_by(order_by: str) -> str:
+        """Валидация ORDER BY (защита от SQL injection). Возвращает безопасную строку."""
+        parts = order_by.split()
+        if len(parts) == 2:
+            field, direction = parts
+            if field in _ALLOWED_ORDER_FIELDS and direction.upper() in _ALLOWED_ORDER_DIRECTIONS:
+                return f"{field} {direction.upper()}"
+        return "created_at DESC"
+
+    @staticmethod
+    def _escape_like(pattern: str) -> str:
+        """Экранирование спецсимволов LIKE (%_\\) для безопасного поиска."""
+        return re.sub(r'([%_\\])', r'\\\1', pattern)
 
     @with_retry(max_attempts=3, delay=0.1)
     async def get_by_id(self, user_id: UUID) -> dict | None:
@@ -38,9 +58,14 @@ class UserRepository(BaseRepository):
         """
         return await self.fetch_one(query, (email,))
 
-    @with_retry(max_attempts=3, delay=0.1)
     async def create(self, email: str, name: str) -> dict:
-        """Создать нового пользователя и вернуть созданную запись."""
+        """
+        Создать нового пользователя и вернуть созданную запись.
+
+        Без @with_retry: INSERT не идемпотентен, повтор может создать дубликат
+        (если ошибка произошла после INSERT, но до получения ответа).
+        UniqueViolation обрабатывается на уровне сервиса.
+        """
         query = """
             INSERT INTO users (email, name)
             VALUES (%s, %s)
@@ -48,7 +73,6 @@ class UserRepository(BaseRepository):
         """
         return await self.fetch_one(query, (email, name))
 
-    @with_retry(max_attempts=3, delay=0.1)
     async def create_many(self, users: list[dict[str, str]]) -> int:
         """
         Массовое создание пользователей.
@@ -108,19 +132,7 @@ class UserRepository(BaseRepository):
             offset: Смещение от начала
             order_by: Поле и направление сортировки
         """
-        # Безопасная валидация order_by (защита от SQL injection)
-        allowed_fields = {"created_at", "updated_at", "email", "name"}
-        allowed_directions = {"ASC", "DESC"}
-
-        parts = order_by.split()
-        if len(parts) == 2:
-            field, direction = parts
-            if field in allowed_fields and direction.upper() in allowed_directions:
-                order_clause = f"{field} {direction.upper()}"
-            else:
-                order_clause = "created_at DESC"
-        else:
-            order_clause = "created_at DESC"
+        order_clause = self._validate_order_by(order_by)
 
         query = f"""
             SELECT id, email, name, created_at, updated_at
@@ -156,19 +168,7 @@ class UserRepository(BaseRepository):
         page_size = min(max(1, page_size), 1000)  # Максимум 1000 записей
         offset = (page - 1) * page_size
 
-        # Безопасная валидация order_by (защита от SQL injection)
-        allowed_fields = {"created_at", "updated_at", "email", "name"}
-        allowed_directions = {"ASC", "DESC"}
-
-        parts = order_by.split()
-        if len(parts) == 2:
-            field, direction = parts
-            if field in allowed_fields and direction.upper() in allowed_directions:
-                order_clause = f"{field} {direction.upper()}"
-            else:
-                order_clause = "created_at DESC"
-        else:
-            order_clause = "created_at DESC"
+        order_clause = self._validate_order_by(order_by)
 
         # Одна оконная функция = 1 соединение из пула вместо 2
         query = f"""
@@ -200,9 +200,10 @@ class UserRepository(BaseRepository):
 
     async def count_by_domain(self, domain: str) -> int:
         """Подсчитать количество пользователей с email в указанном домене."""
+        safe_domain = self._escape_like(domain)
         return await self.count(
             "email LIKE %s",
-            (f"%@{domain}",),
+            (f"%@{safe_domain}",),
         )
 
     async def find_by_name_pattern(self, pattern: str, limit: int = 50) -> list[dict]:
@@ -213,6 +214,7 @@ class UserRepository(BaseRepository):
             pattern: Паттерн для поиска (будет обёрнут в %pattern%)
             limit: Максимальное количество результатов
         """
+        safe_pattern = self._escape_like(pattern)
         query = """
             SELECT id, email, name, created_at, updated_at
             FROM users
@@ -220,7 +222,7 @@ class UserRepository(BaseRepository):
             ORDER BY name
             LIMIT %s
         """
-        return await self.fetch_all(query, (f"%{pattern}%", limit))
+        return await self.fetch_all(query, (f"%{safe_pattern}%", limit))
 
     async def bulk_update_domain(self, old_domain: str, new_domain: str) -> int:
         """
@@ -229,6 +231,7 @@ class UserRepository(BaseRepository):
         Возвращает:
             Количество обновлённых записей
         """
+        safe_old_domain = self._escape_like(old_domain)
         query = """
             UPDATE users
             SET email = REPLACE(email, %s, %s),
@@ -238,7 +241,7 @@ class UserRepository(BaseRepository):
         async with self.transaction() as conn:
             cursor = await conn.execute(
                 query,
-                (f"@{old_domain}", f"@{new_domain}", f"%@{old_domain}"),
+                (f"@{old_domain}", f"@{new_domain}", f"%@{safe_old_domain}"),
             )
             return cursor.rowcount
 
@@ -315,26 +318,3 @@ class UserRepository(BaseRepository):
             "has_more": has_more,
         }
 
-    async def create_with_validation(self, email: str, name: str) -> dict:
-        """
-        Создать пользователя с валидацией уникальности email.
-
-        Raises:
-            ValueError: Если email уже существует
-        """
-        # Проверка в транзакции для атомарности
-        async with self.transaction() as conn:
-            # Проверяем существование
-            exists = await self.exists("email = %s", (email,), conn)
-            if exists:
-                raise ValueError(f"Пользователь с email {email} уже существует")
-
-            # Создаём
-            query = """
-                INSERT INTO users (email, name)
-                VALUES (%s, %s)
-                RETURNING id, email, name, created_at, updated_at
-            """
-            result = await conn.execute(query, (email, name))
-            row = await result.fetchone()
-            return dict(row)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
@@ -60,7 +61,9 @@ def with_retry(
                             func.__name__,
                             str(e),
                         )
-                        await asyncio.sleep(current_delay)
+                        # Jitter: ±25% от текущей задержки для предотвращения thundering herd
+                        jittered_delay = current_delay * (0.75 + random.random() * 0.5)
+                        await asyncio.sleep(jittered_delay)
                         current_delay *= backoff
                     else:
                         logger.error(

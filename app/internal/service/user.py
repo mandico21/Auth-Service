@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from psycopg.errors import UniqueViolation
+
 from app.internal.models.user.api import CreateUserRequest, UpdateUserRequest
 from app.internal.repository.postgres import UserRepository
 from app.pkg.logger import get_logger
-from app.pkg.models.base import ConflictError, NotFoundError
+from app.pkg.models.base import ConflictError, DependencyError, NotFoundError
 
 __all__ = ["UserService"]
 
@@ -20,7 +22,7 @@ class UserService:
     Сервис пользователей.
 
     Содержит бизнес-логику:
-    - Валидация уникальности email перед созданием
+    - Атомарная вставка с обработкой UniqueViolation (без race condition)
     - Проверка существования перед обновлением/удалением
     - Нормализация данных
     - Логирование бизнес-операций
@@ -50,8 +52,8 @@ class UserService:
 
         Бизнес-логика:
         - Нормализация email (lowercase, strip)
-        - Проверка уникальности email
-        - Создание записи
+        - Атомарная вставка (БД гарантирует уникальность email через UNIQUE constraint)
+        - Обработка UniqueViolation вместо предварительной проверки (без TOCTOU race condition)
 
         Raises:
             ConflictError: если email уже существует
@@ -59,20 +61,25 @@ class UserService:
         email = data.email.strip().lower()
         name = data.name.strip()
 
-        # Проверка уникальности
-        if await self._repo.email_exists(email):
-            raise ConflictError(
-                message="Пользователь с таким email уже существует",
-                details={"email": email},
-            )
+        try:
+            user = await self._repo.create(email=email, name=name)
+        except DependencyError as e:
+            if isinstance(e.cause, UniqueViolation):
+                raise ConflictError(
+                    message="Пользователь с таким email уже существует",
+                    details={"email": email},
+                ) from e
+            raise
 
-        user = await self._repo.create(email=email, name=name)
         logger.info("Пользователь создан: id=%s, email=%s", user["id"], email)
         return user
 
     async def update(self, user_id: UUID, data: UpdateUserRequest) -> dict:
         """
         Обновить пользователя.
+
+        Обработка UniqueViolation вместо предварительной проверки email_exists
+        (устраняет TOCTOU race condition при конкурентных запросах).
 
         Raises:
             NotFoundError: если пользователь не найден
@@ -92,19 +99,22 @@ class UserService:
             fields["name"] = data.name.strip()
         if data.email is not None:
             email = data.email.strip().lower()
-            # Проверяем уникальность если email меняется
             if email != existing["email"]:
-                if await self._repo.email_exists(email):
-                    raise ConflictError(
-                        message="Пользователь с таким email уже существует",
-                        details={"email": email},
-                    )
                 fields["email"] = email
 
         if not fields:
             return existing
 
-        user = await self._repo.update(user_id, **fields)
+        try:
+            user = await self._repo.update(user_id, **fields)
+        except DependencyError as e:
+            if isinstance(e.cause, UniqueViolation):
+                raise ConflictError(
+                    message="Пользователь с таким email уже существует",
+                    details={"email": fields.get("email", "")},
+                ) from e
+            raise
+
         logger.info("Пользователь обновлён: id=%s, fields=%s", user_id, list(fields.keys()))
         return user
 

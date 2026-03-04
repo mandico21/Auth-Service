@@ -15,4 +15,4 @@ class UpdateUserRequest(BaseModel):
     """Запрос на обновление пользователя."""
 
     name: NotEmptyStr | None = None
-    email: str | None = None
+    email: UserFields.Email | None = None

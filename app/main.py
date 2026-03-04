@@ -10,6 +10,7 @@ from typing import Annotated
 from dishka import FromDishka, make_async_container
 from dishka.integrations.fastapi import DishkaRoute, setup_dishka
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from app.configuration.providers import (
@@ -173,10 +174,14 @@ def create_app() -> FastAPI:
             "redis": await redis.healthcheck(),
         }
         all_ok = all(checks.values())
-        return {
+        content = {
             "status": "ok" if all_ok else "degraded",
             "checks": checks,
         }
+        return JSONResponse(
+            status_code=200 if all_ok else 503,
+            content=content,
+        )
 
     @application.get("/health/detailed", tags=["health"])
     async def detailed_health(

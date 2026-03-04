@@ -98,7 +98,7 @@ class PrometheusMiddleware:
             raise
         finally:
             duration = time.perf_counter() - start_time
-            label_path = resolved_path if resolved_path != "/unknown" else path
+            label_path = resolved_path
             REQUEST_COUNT.labels(method=method, endpoint=label_path, status=status_code).inc()
             REQUEST_LATENCY.labels(method=method, endpoint=label_path).observe(duration)
             REQUESTS_IN_PROGRESS.labels(method=method, endpoint=path).dec()
