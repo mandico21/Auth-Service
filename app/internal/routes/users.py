@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request, Response
 from app.internal.models.user.api import (
     CreateUserAPIRequest,
     CreateUserAPIResponse,
+    MeAPIResponse,
     UserAPIResponse,
     ReadUserByUsernameAPIRequest,
 )
@@ -43,6 +44,23 @@ async def create_user(
         request.url_for("get_user_by_username", username=user.username)
     )
     return user
+
+
+@router.get(
+    "/me",
+    response_model=MeAPIResponse,
+    summary="Мой профиль",
+    description="Возвращает полный профиль текущего авторизованного пользователя с его разрешениями.",
+    responses={
+        200: {"description": "Профиль пользователя"},
+        401: {"description": "Не авторизован"},
+    },
+)
+async def get_me(
+    service: Annotated[UserService, FromDishka()],
+    current_user_id: CurrentUserID,
+) -> MeAPIResponse:
+    return await service.get_me(current_user_id)
 
 
 @router.get(

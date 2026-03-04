@@ -17,10 +17,24 @@ class UserRepo(BaseRepository):
         sql = """
               insert into users (username, email, first_name, last_name, password)
               values (%(username)s, %(email)s, %(first_name)s, %(last_name)s, %(password)s)
-              returning id, username, email, first_name, last_name, created_at, updated_at \
+              returning id, username, email, first_name, last_name,
+                        is_active, is_superuser, created_at, updated_at \
               """
-        res = await self.fetch_one(sql, cmd.to_dict())
-        return res
+        return await self.fetch_one(sql, cmd.to_dict())
+
+    @collect_response
+    async def read_by_id(
+        self,
+        query: repo.ReadUserByIdRepoQuery,
+    ) -> repo.UserRepoResponse | None:
+        """Получить пользователя по UUID."""
+        sql = """
+              select id, username, email, first_name, last_name,
+                     is_active, is_superuser, created_at, updated_at
+              from users
+              where id = %(id)s \
+              """
+        return await self.fetch_one(sql, query.to_dict())
 
     @collect_response
     async def read_by_username(
@@ -28,12 +42,12 @@ class UserRepo(BaseRepository):
         query: repo.ReadUserByUsernameRepoQuery
     ) -> repo.UserRepoResponse | None:
         sql = """
-              select id, username, email, first_name, last_name, created_at, updated_at
+              select id, username, email, first_name, last_name,
+                     is_active, is_superuser, created_at, updated_at
               from users
               where username = %(username)s \
               """
-        res = await self.fetch_one(sql, query.to_dict())
-        return res
+        return await self.fetch_one(sql, query.to_dict())
 
     @collect_response
     async def read_by_username_with_password(
@@ -46,8 +60,7 @@ class UserRepo(BaseRepository):
               from users
               where username = %(username)s \
               """
-        res = await self.fetch_one(sql, query.to_dict())
-        return res
+        return await self.fetch_one(sql, query.to_dict())
 
     @collect_response
     async def read_by_email(
@@ -55,9 +68,9 @@ class UserRepo(BaseRepository):
         query: repo.ReadUserByEmailRepoQuery
     ) -> repo.UserRepoResponse | None:
         sql = """
-              select id, username, email, first_name, last_name, created_at, updated_at
+              select id, username, email, first_name, last_name,
+                     is_active, is_superuser, created_at, updated_at
               from users
               where email = %(email)s \
               """
-        res = await self.fetch_one(sql, query.to_dict())
-        return res
+        return await self.fetch_one(sql, query.to_dict())

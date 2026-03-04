@@ -63,6 +63,21 @@ class UserService:
         user = await self._repo.create(request.migrate(repo.CreateUserRepoCommand))
         return user.migrate(api.CreateUserAPIResponse)
 
+    async def get_me(self, user_id: UUID) -> api.MeAPIResponse:
+        """Получить полный профиль текущего пользователя с его permissions."""
+        user = await self._repo.read_by_id(
+            query=repo.ReadUserByIdRepoQuery(id=user_id)
+        )
+        if not user:
+            raise NotFoundError(message="Пользователь не найден")
+
+        permissions = await self._perm.get_user_permissions(user_id)
+
+        return api.MeAPIResponse(
+            **user.to_dict(),
+            permissions=permissions,
+        )
+
     async def delete(self, user_id: UUID, actor_id: UUID) -> None:
         """Удалить пользователя. Требует права delete_user."""
         await self._perm.require(actor_id, "delete_user")

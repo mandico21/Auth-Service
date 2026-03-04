@@ -4,8 +4,10 @@ __all__ = [
     "ReadUserByUsernameAPIRequest",
     "ReadUserByEmailAPIRequest",
     "UserAPIResponse",
+    "MeAPIResponse",
 ]
 
+from app.internal.models.permissions.api import PermissionAPIResponse
 from app.internal.models.user import UserFields, BaseUser
 from app.pkg.models.base import BaseModel
 from app.pkg.models.types import NotEmptyStr
@@ -71,3 +73,19 @@ class UserAPIResponse(BaseUser):
     email: UserFields.email
     created_at: UserFields.created_at
     updated_at: UserFields.updated_at
+
+
+class MeAPIResponse(BaseUser):
+    """Полный профиль текущего авторизованного пользователя с permissions."""
+
+    id: UserFields.id
+    first_name: UserFields.first_name
+    last_name: UserFields.last_name
+    username: UserFields.username
+    email: UserFields.email
+    is_active: UserFields.is_active
+    is_superuser: UserFields.is_superuser
+    permissions: list[PermissionAPIResponse]
+    created_at: UserFields.created_at
+    updated_at: UserFields.updated_at
+

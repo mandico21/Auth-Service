@@ -36,6 +36,15 @@ class PermissionChecker:
                 message=f"Недостаточно прав: требуется разрешение '{code}'"
             )
 
+    async def get_user_permissions(
+        self, user_id: UUID
+    ) -> list[api.PermissionAPIResponse]:
+        """Получить список активных разрешений пользователя."""
+        permissions = await self._repo.get_user_permissions(
+            repo.ReadUserPermissionsRepoQuery(user_id=user_id)
+        )
+        return [p.migrate(api.PermissionAPIResponse) for p in permissions]
+
 
 class PermissionService:
     """Бизнес-логика для управления разрешениями."""

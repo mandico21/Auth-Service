@@ -1,5 +1,6 @@
 __all__ = [
     "CreateUserRepoCommand",
+    "ReadUserByIdRepoQuery",
     "ReadUserByUsernameRepoQuery",
     "ReadUserByEmailRepoQuery",
     "UserRepoResponse",
@@ -45,6 +46,12 @@ class CreateUserRepoCommand(BaseUser):
 
 
 # QUERY
+class ReadUserByIdRepoQuery(BaseModel):
+    """Запрос для получения пользователя по ID."""
+
+    id: UserFields.id
+
+
 class ReadUserByUsernameRepoQuery(BaseUser):
     """Запрос для получения пользователя по имени пользователя."""
 
@@ -66,6 +73,8 @@ class UserRepoResponse(BaseUser):
     last_name: UserFields.last_name
     username: UserFields.username
     email: UserFields.email
+    is_active: UserFields.is_active
+    is_superuser: UserFields.is_superuser
     created_at: UserFields.created_at
     updated_at: UserFields.updated_at
 
