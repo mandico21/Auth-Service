@@ -8,7 +8,7 @@ from app.internal.repository.postgres import UserRepo, RefreshTokenRepo, Permiss
 from app.internal.repository.redis import RefreshTokenRedisRepo
 from app.internal.service import UserService
 from app.internal.service.token import TokenService
-from app.internal.service.permission import PermissionService
+from app.internal.service.permission import PermissionChecker, PermissionService
 from app.pkg.settings import Settings
 
 
@@ -17,9 +17,14 @@ class ServiceProvider(Provider):
     scope = Scope.REQUEST
 
     @provide
-    def user_service(self, user_repo: UserRepo) -> UserService:
+    def permission_checker(self, permission_repo: PermissionRepo) -> PermissionChecker:
+        """Предоставляет PermissionChecker — используется в любом сервисе."""
+        return PermissionChecker(permission_repo=permission_repo)
+
+    @provide
+    def user_service(self, user_repo: UserRepo, perm: PermissionChecker) -> UserService:
         """Предоставляет UserService для скоупа запроса."""
-        return UserService(user_repo=user_repo)
+        return UserService(user_repo=user_repo, perm=perm)
 
     @provide
     def token_service(
@@ -38,7 +43,8 @@ class ServiceProvider(Provider):
         )
 
     @provide
-    def permission_service(self, permission_repo: PermissionRepo) -> PermissionService:
+    def permission_service(
+        self, permission_repo: PermissionRepo, checker: PermissionChecker
+    ) -> PermissionService:
         """Предоставляет PermissionService для скоупа запроса."""
-        return PermissionService(permission_repo=permission_repo)
-
+        return PermissionService(permission_repo=permission_repo, checker=checker)

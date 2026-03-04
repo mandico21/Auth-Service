@@ -8,13 +8,17 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter, status
 
 from app.internal.models.permissions.api import (
+    AssignPermissionAPICommand,
     AssignPermissionAPIRequest,
+    CreatePermissionAPICommand,
     CreatePermissionAPIRequest,
+    GetUserPermissionsAPIQuery,
     PermissionAPIResponse,
+    RevokePermissionAPICommand,
     UserPermissionsAPIResponse,
 )
+from app.internal.models.permissions.repo import ReadPermissionByCodeRepoQuery
 from app.internal.pkg.middlewares.auth import CurrentUserID
-from app.internal.pkg.middlewares.permission import require_permission
 from app.internal.service.permission import PermissionService
 
 router = APIRouter(route_class=DishkaRoute)
@@ -26,7 +30,6 @@ router = APIRouter(route_class=DishkaRoute)
     status_code=status.HTTP_201_CREATED,
     summary="Создать разрешение",
     description="Создаёт новое разрешение. Требует права `manage_permissions`.",
-    dependencies=[require_permission("manage_permissions")],
     responses={
         201: {"description": "Разрешение успешно создано"},
         401: {"description": "Не авторизован"},
@@ -37,9 +40,11 @@ router = APIRouter(route_class=DishkaRoute)
 async def create_permission(
     body: CreatePermissionAPIRequest,
     service: Annotated[PermissionService, FromDishka()],
-    _: CurrentUserID,
+    actor_id: CurrentUserID,
 ) -> PermissionAPIResponse:
-    return await service.create(body)
+    return await service.create(
+        CreatePermissionAPICommand(**body.to_dict(), actor_id=actor_id)
+    )
 
 
 @router.get(
@@ -75,7 +80,7 @@ async def get_permission(
     service: Annotated[PermissionService, FromDishka()],
     _: CurrentUserID,
 ) -> PermissionAPIResponse:
-    return await service.read_by_code(code)
+    return await service.read_by_code(ReadPermissionByCodeRepoQuery(code=code))
 
 
 @router.post(
@@ -83,7 +88,6 @@ async def get_permission(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Назначить разрешение пользователю",
     description="Назначает разрешение указанному пользователю. Требует права `manage_permissions`.",
-    dependencies=[require_permission("manage_permissions")],
     responses={
         204: {"description": "Разрешение назначено"},
         401: {"description": "Не авторизован"},
@@ -95,9 +99,11 @@ async def assign_permission(
     code: str,
     body: AssignPermissionAPIRequest,
     service: Annotated[PermissionService, FromDishka()],
-    _: CurrentUserID,
+    actor_id: CurrentUserID,
 ) -> None:
-    await service.assign_to_user(code=code, user_id=body.user_id)
+    await service.assign_to_user(
+        AssignPermissionAPICommand(code=code, user_id=body.user_id, actor_id=actor_id)
+    )
 
 
 @router.delete(
@@ -105,7 +111,6 @@ async def assign_permission(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Отозвать разрешение у пользователя",
     description="Отзывает разрешение у указанного пользователя. Требует права `manage_permissions`.",
-    dependencies=[require_permission("manage_permissions")],
     responses={
         204: {"description": "Разрешение отозвано"},
         401: {"description": "Не авторизован"},
@@ -117,9 +122,11 @@ async def revoke_permission(
     code: str,
     body: AssignPermissionAPIRequest,
     service: Annotated[PermissionService, FromDishka()],
-    _: CurrentUserID,
+    actor_id: CurrentUserID,
 ) -> None:
-    await service.revoke_from_user(code=code, user_id=body.user_id)
+    await service.revoke_from_user(
+        RevokePermissionAPICommand(code=code, user_id=body.user_id, actor_id=actor_id)
+    )
 
 
 @router.get(
@@ -137,4 +144,4 @@ async def get_user_permissions(
     service: Annotated[PermissionService, FromDishka()],
     _: CurrentUserID,
 ) -> UserPermissionsAPIResponse:
-    return await service.get_user_permissions(user_id=user_id)
+    return await service.get_user_permissions(GetUserPermissionsAPIQuery(user_id=user_id))

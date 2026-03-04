@@ -1,13 +1,17 @@
+from uuid import UUID
+
 from app.internal.models.user import api, repo
 from app.internal.repository.postgres import UserRepo
 from app.internal.service.helpers import hash_password, verify_password
+from app.internal.service.permission import PermissionChecker
 from app.pkg.models.base import NotFoundError, ConflictError, UnauthorizedError
 
 
 class UserService:
 
-    def __init__(self, user_repo: UserRepo):
+    def __init__(self, user_repo: UserRepo, perm: PermissionChecker):
         self._repo = user_repo
+        self._perm = perm
 
     async def authenticate(self, username: str, password: str) -> api.UserAPIResponse:
         """Проверить учётные данные и вернуть пользователя.
@@ -58,3 +62,7 @@ class UserService:
         request.password = hash_password(request.password)
         user = await self._repo.create(request.migrate(repo.CreateUserRepoCommand))
         return user.migrate(api.CreateUserAPIResponse)
+
+    async def delete(self, user_id: UUID, actor_id: UUID) -> None:
+        """Удалить пользователя. Требует права delete_user."""
+        await self._perm.require(actor_id, "delete_user")
