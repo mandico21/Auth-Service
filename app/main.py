@@ -21,6 +21,7 @@ from app.configuration.providers import (
 )
 from app.internal.pkg.middlewares.exception_handlers import register_exception_handlers
 from app.internal.pkg.middlewares.prometheus import PrometheusMiddleware, metrics_endpoint
+from app.internal.pkg.middlewares.rate_limit import RateLimitMiddleware
 from app.internal.pkg.middlewares.request_id import RequestIdMiddleware
 from app.internal.pkg.middlewares.timeout import TimeoutMiddleware
 from app.internal.routes import register_routes
@@ -111,7 +112,9 @@ def create_app() -> FastAPI:
     application.router.route_class = DishkaRoute
 
     # Регистрируем middleware (порядок важен - последний добавленный выполняется первым)
-    # 1. CORS (внешний слой)
+    # Pure ASGI middleware — не буферизируют ответ, поддерживают streaming
+
+    # 1. CORS (внешний слой) — оставляем Starlette CORSMiddleware (проверен и безопасен)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.API.CORS_ORIGINS,
@@ -120,20 +123,29 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 2. Request ID (для трейсинга)
+    # 2. Request ID (для трейсинга) — Pure ASGI
     application.add_middleware(RequestIdMiddleware)
 
-    # 3. Prometheus метрики
+    # 3. Prometheus метрики — Pure ASGI
     application.add_middleware(
         PrometheusMiddleware,
         app_name=settings.API.INSTANCE_APP_NAME,
     )
 
-    # 4. Timeout (внутренний слой - оборачивает обработку запроса)
+    # 4. Timeout (внутренний слой) — Pure ASGI
     application.add_middleware(
         TimeoutMiddleware,
         timeout=settings.API.REQUEST_TIMEOUT,
     )
+
+    # 5. Rate limiting — Pure ASGI, Redis sliding window (опционально)
+    #    Redis получается лениво из Dishka DI. Если Redis недоступен — fail-open.
+    if settings.API.RATE_LIMIT_ENABLED:
+        application.add_middleware(
+            RateLimitMiddleware,
+            max_requests=settings.API.RATE_LIMIT_REQUESTS,
+            window=settings.API.RATE_LIMIT_WINDOW,
+        )
 
     # Регистрируем обработчики исключений
     register_exception_handlers(application)

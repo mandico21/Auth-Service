@@ -50,7 +50,14 @@ class APISettings(_Settings):
 
 
 class PostgresSettings(_Settings):
-    """Postgresql settings."""
+    """
+    Postgresql settings.
+
+    Pool sizing для multi-worker:
+        MAX_CONNECTION = (pg_max_connections - superuser_reserved) / workers
+        Пример: pg_max_connections=100, reserved=3, workers=4 → MAX_CONNECTION = 24
+        По умолчанию 10 — безопасно для 4-8 воркеров при стандартном pg_max_connections=100.
+    """
 
     HOST: str
     PORT: int
@@ -59,7 +66,10 @@ class PostgresSettings(_Settings):
     DATABASE_NAME: str
 
     MIN_CONNECTION: PositiveInt = 2
-    MAX_CONNECTION: PositiveInt = 20
+    MAX_CONNECTION: PositiveInt = Field(
+        default=10,
+        description="Max pool connections PER WORKER. Formula: (pg_max_connections - 3) / workers",
+    )
     MAX_IDLE: int = Field(default=300, ge=0, description="Max idle time for connections in seconds")
     TIMEOUT: int = Field(default=30, ge=1, description="Connection acquisition timeout")
     STATEMENT_TIMEOUT: int = Field(default=30000, ge=0, description="Statement timeout in milliseconds")

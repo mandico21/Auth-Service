@@ -60,6 +60,10 @@ services:
 
       REDIS__ENABLED: "true"
       REDIS__URL: "redis://redis:6379/0"
+
+      # Logging: text (dev) или json (production, для ELK/Loki)
+      LOG_FORMAT: "text"
+      LOG_LEVEL: "INFO"
     ports:
       - "8000:8000"
     volumes:

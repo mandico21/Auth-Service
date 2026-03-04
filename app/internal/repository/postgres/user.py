@@ -1,7 +1,6 @@
 """User репозиторий для PostgreSQL."""
 
-from __future__ import annotations
-
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -242,6 +241,79 @@ class UserRepository(BaseRepository):
                 (f"@{old_domain}", f"@{new_domain}", f"%@{old_domain}"),
             )
             return cursor.rowcount
+
+    async def list_cursor(
+        self,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """
+        Cursor-based (keyset) пагинация.
+
+        Не деградирует на глубоких страницах (в отличие от OFFSET).
+        Cursor — это ISO-формат created_at последнего элемента предыдущей страницы.
+
+        Возвращает:
+            {
+                "items": [...],
+                "next_cursor": "2024-01-15T10:30:00+00:00" | None,
+                "has_more": True/False
+            }
+        """
+        limit = min(max(1, limit), 1000)
+
+        if cursor:
+            # Парсим cursor как datetime (ISO формат)
+            try:
+                cursor_dt = datetime.fromisoformat(cursor)
+            except (ValueError, TypeError):
+                cursor_dt = None
+
+            if cursor_dt:
+                query = """
+                    SELECT id, email, name, created_at, updated_at
+                    FROM users
+                    WHERE created_at < %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                """
+                rows = await self.fetch_all(query, (cursor_dt, limit + 1))
+            else:
+                # Невалидный cursor — возвращаем с начала
+                query = """
+                    SELECT id, email, name, created_at, updated_at
+                    FROM users
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                """
+                rows = await self.fetch_all(query, (limit + 1,))
+        else:
+            query = """
+                SELECT id, email, name, created_at, updated_at
+                FROM users
+                ORDER BY created_at DESC
+                LIMIT %s
+            """
+            rows = await self.fetch_all(query, (limit + 1,))
+
+        # Запрашиваем limit+1 чтобы определить has_more
+        has_more = len(rows) > limit
+        items = rows[:limit]
+
+        next_cursor = None
+        if has_more and items:
+            # cursor = created_at последнего элемента
+            last_created_at = items[-1]["created_at"]
+            if isinstance(last_created_at, datetime):
+                next_cursor = last_created_at.isoformat()
+            else:
+                next_cursor = str(last_created_at)
+
+        return {
+            "items": items,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        }
 
     async def create_with_validation(self, email: str, name: str) -> dict:
         """

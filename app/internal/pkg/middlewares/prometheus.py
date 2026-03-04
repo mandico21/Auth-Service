@@ -1,16 +1,16 @@
-"""Prometheus метрики middleware и эндпоинт."""
+"""Prometheus метрики middleware и эндпоинт (Pure ASGI)."""
 
 from __future__ import annotations
 
+import asyncio
 import time
-from typing import Callable
 
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-__all__ = ["PrometheusMiddleware", "metrics_endpoint", "REGISTRY"]
+__all__ = ["PrometheusMiddleware", "metrics_endpoint"]
 
 # Метрики
 REQUEST_COUNT = Counter(
@@ -33,53 +33,98 @@ REQUESTS_IN_PROGRESS = Gauge(
 )
 
 
-def _get_path_template(request: Request) -> str:
-    """Получить шаблон пути для метрик (избегаем взрыва кардинальности)."""
-    # Используем путь роута если доступен (например, /users/{user_id})
-    if hasattr(request, "scope") and "route" in request.scope:
-        route = request.scope["route"]
-        if hasattr(route, "path"):
-            return route.path
+def _get_path_template(scope: Scope, app: ASGIApp) -> str:
+    """
+    Получить шаблон пути для метрик (избегаем взрыва кардинальности).
+
+    Пытаемся получить route path template (например /users/{user_id})
+    через matching роутов Starlette/FastAPI.
+    """
+    # Пробуем получить из scope (если route уже зарезолвлен)
+    route = scope.get("route")
+    if route and hasattr(route, "path"):
+        return route.path
+
     # Fallback: нормализуем путь, чтобы UUID/числовые ID не создавали уникальные метки
     return "/unknown"
 
 
-class PrometheusMiddleware(BaseHTTPMiddleware):
-    """Middleware для сбора Prometheus метрик HTTP запросов."""
+class PrometheusMiddleware:
+    """
+    Pure ASGI middleware для сбора Prometheus метрик HTTP запросов.
 
-    def __init__(self, app, app_name: str = "fastapi"):
-        super().__init__(app)
+    Преимущества над BaseHTTPMiddleware:
+    - Не буферизирует тело ответа (поддержка streaming)
+    - Не ломает background tasks
+    - Меньше overhead на каждый запрос
+    """
+
+    def __init__(self, app: ASGIApp, app_name: str = "fastapi") -> None:
+        self.app = app
         self.app_name = app_name
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        method = request.method
-        path = _get_path_template(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/unknown")
 
         # Пропускаем сам эндпоинт метрик
         if path == "/metrics":
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
+
+        # Будем определять шаблон пути после обработки (когда route зарезолвлен)
+        status_code = 500  # default если ответ не придёт
+        start_time = time.perf_counter()
+        resolved_path = "/unknown"
+
+        async def send_with_metrics(message: Message) -> None:
+            nonlocal status_code, resolved_path
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 500)
+                # Route уже зарезолвлен к моменту ответа
+                resolved_path = _get_path_template(scope, self.app)
+            await send(message)
 
         REQUESTS_IN_PROGRESS.labels(method=method, endpoint=path).inc()
-        start_time = time.perf_counter()
-
         try:
-            response = await call_next(request)
-            status = response.status_code
+            await self.app(scope, receive, send_with_metrics)
         except Exception:
-            status = 500
+            resolved_path = _get_path_template(scope, self.app)
+            status_code = 500
             raise
         finally:
             duration = time.perf_counter() - start_time
-            REQUEST_COUNT.labels(method=method, endpoint=path, status=status).inc()
-            REQUEST_LATENCY.labels(method=method, endpoint=path).observe(duration)
+            label_path = resolved_path if resolved_path != "/unknown" else path
+            REQUEST_COUNT.labels(method=method, endpoint=label_path, status=status_code).inc()
+            REQUEST_LATENCY.labels(method=method, endpoint=label_path).observe(duration)
             REQUESTS_IN_PROGRESS.labels(method=method, endpoint=path).dec()
-
-        return response
 
 
 async def metrics_endpoint(request: Request) -> Response:
-    """Эндпоинт Prometheus метрик."""
+    """Эндпоинт Prometheus метрик. Обновляет pool metrics при каждом scrape."""
+    # Обновляем pool metrics если коннекторы доступны через DI
+    if hasattr(request.app, "state") and hasattr(request.app.state, "dishka_container"):
+        try:
+            from app.internal.pkg.middlewares.pool_metrics import update_pool_metrics
+            from app.pkg.connectors.postgres import PostgresConnector
+            from app.pkg.connectors.redis import RedisConnector
+
+            container = request.app.state.dishka_container
+            async with container() as scope:
+                postgres = await scope.get(PostgresConnector)
+                redis = await scope.get(RedisConnector)
+                update_pool_metrics(postgres, redis)
+        except Exception:
+            pass  # Не блокируем scrape при ошибке
+
+    # generate_latest() — синхронная, может блокировать event loop при большом числе метрик
+    content = await asyncio.get_event_loop().run_in_executor(None, generate_latest)
+
     return Response(
-        content=generate_latest(),
+        content=content,
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )
