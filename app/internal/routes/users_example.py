@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 
 from app.internal.models.user.api import CreateUserRequest, UpdateUserRequest
 from app.internal.models.user.repo import UserListResponse, UserResponse
-from app.internal.service.user import UserService
+from app.internal.service.user2 import UserService
 
 router = APIRouter(route_class=DishkaRoute)
 

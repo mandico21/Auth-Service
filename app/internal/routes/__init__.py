@@ -20,10 +20,16 @@ def register_routes(app: "FastAPI") -> None:
     Структура API:
         /api/v1/users      - Управление пользователями
     """
-    from app.internal.routes.users_example import router as users_router
+    from app.internal.routes.users import router as users_router
+    from app.internal.routes.users_example import router as users_example_router
 
     app.include_router(
         users_router,
         prefix="/api/v1/users",
         tags=["users"],
+    )
+    app.include_router(
+        users_example_router,
+        prefix="/api/v1/users-example",
+        tags=["users-example"],
     )

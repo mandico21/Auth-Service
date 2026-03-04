@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from dishka import Provider, Scope, provide
 
-from app.internal.repository.postgres import UserRepository
-from app.internal.service.user import UserService
+from app.internal.repository.postgres import UserRepo
+from app.internal.service import UserService
 
 
 class ServiceProvider(Provider):
     """Предоставляет экземпляры сервисного слоя."""
+    scope = Scope.REQUEST
 
-    @provide(scope=Scope.REQUEST)
-    def user_service(self, user_repo: UserRepository) -> UserService:
+    @provide
+    def user_service(self, user_repo: UserRepo) -> UserService:
         """Предоставляет UserService для скоупа запроса."""
-        return UserService(user_repo)
+        return UserService(user_repo=user_repo)

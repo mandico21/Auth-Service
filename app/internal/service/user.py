@@ -1,156 +1,47 @@
-"""Сервис пользователей — бизнес-логика между роутами и репозиторием."""
-
-from __future__ import annotations
-
-from typing import Any
-from uuid import UUID
-
-from psycopg.errors import UniqueViolation
-
-from app.internal.models.user.api import CreateUserRequest, UpdateUserRequest
-from app.internal.repository.postgres import UserRepository
-from app.pkg.logger import get_logger
-from app.pkg.models.base import ConflictError, DependencyError, NotFoundError
-
-__all__ = ["UserService"]
-
-logger = get_logger(__name__)
+from app.internal.models.user import api, repo
+from app.internal.repository.postgres import UserRepo
+from app.internal.service.helpers import hash_password
+from app.pkg.models.base import NotFoundError, ConflictError
 
 
 class UserService:
-    """
-    Сервис пользователей.
 
-    Содержит бизнес-логику:
-    - Атомарная вставка с обработкой UniqueViolation (без race condition)
-    - Проверка существования перед обновлением/удалением
-    - Нормализация данных
-    - Логирование бизнес-операций
-    """
-
-    def __init__(self, user_repo: UserRepository) -> None:
+    def __init__(self, user_repo: UserRepo):
         self._repo = user_repo
 
-    async def get_by_id(self, user_id: UUID) -> dict:
-        """
-        Получить пользователя по ID.
-
-        Raises:
-            NotFoundError: если пользователь не найден
-        """
-        user = await self._repo.get_by_id(user_id)
+    async def read_by_username(
+        self,
+        request: api.ReadUserByUsernameAPIRequest
+    ) -> api.UserAPIResponse | None:
+        user = await self._repo.read_by_username(
+            query=request.migrate(repo.ReadUserByUsernameRepoQuery)
+        )
         if not user:
             raise NotFoundError(
-                message="Пользователь не найден",
-                details={"user_id": str(user_id)},
+                message="Пользователь с таким именем не найден",
+                details={"username": request.username},
             )
-        return user
+        return user.migrate(api.UserAPIResponse)
 
-    async def create(self, data: CreateUserRequest) -> dict:
-        """
-        Создать нового пользователя.
-
-        Бизнес-логика:
-        - Нормализация email (lowercase, strip)
-        - Атомарная вставка (БД гарантирует уникальность email через UNIQUE constraint)
-        - Обработка UniqueViolation вместо предварительной проверки (без TOCTOU race condition)
-
-        Raises:
-            ConflictError: если email уже существует
-        """
-        email = data.email.strip().lower()
-        name = data.name.strip()
-
-        try:
-            user = await self._repo.create(email=email, name=name)
-        except DependencyError as e:
-            if isinstance(e.cause, UniqueViolation):
-                raise ConflictError(
-                    message="Пользователь с таким email уже существует",
-                    details={"email": email},
-                ) from e
-            raise
-
-        logger.info("Пользователь создан: id=%s, email=%s", user["id"], email)
-        return user
-
-    async def update(self, user_id: UUID, data: UpdateUserRequest) -> dict:
-        """
-        Обновить пользователя.
-
-        Обработка UniqueViolation вместо предварительной проверки email_exists
-        (устраняет TOCTOU race condition при конкурентных запросах).
-
-        Raises:
-            NotFoundError: если пользователь не найден
-            ConflictError: если новый email уже занят
-        """
-        # Проверяем существование
-        existing = await self._repo.get_by_id(user_id)
-        if not existing:
-            raise NotFoundError(
-                message="Пользователь не найден",
-                details={"user_id": str(user_id)},
-            )
-
-        # Собираем изменённые поля
-        fields: dict[str, Any] = {}
-        if data.name is not None:
-            fields["name"] = data.name.strip()
-        if data.email is not None:
-            email = data.email.strip().lower()
-            if email != existing["email"]:
-                fields["email"] = email
-
-        if not fields:
-            return existing
-
-        try:
-            user = await self._repo.update(user_id, **fields)
-        except DependencyError as e:
-            if isinstance(e.cause, UniqueViolation):
-                raise ConflictError(
-                    message="Пользователь с таким email уже существует",
-                    details={"email": fields.get("email", "")},
-                ) from e
-            raise
-
-        logger.info("Пользователь обновлён: id=%s, fields=%s", user_id, list(fields.keys()))
-        return user
-
-    async def delete(self, user_id: UUID) -> None:
-        """
-        Удалить пользователя.
-
-        Raises:
-            NotFoundError: если пользователь не найден
-        """
-        deleted = await self._repo.delete(user_id)
-        if not deleted:
-            raise NotFoundError(
-                message="Пользователь не найден",
-                details={"user_id": str(user_id)},
-            )
-        logger.info("Пользователь удалён: id=%s", user_id)
-
-    async def list_paginated(
-        self,
-        page: int = 1,
-        page_size: int = 50,
-        order_by: str = "created_at DESC",
-    ) -> dict[str, Any]:
-        """Получить пагинированный список пользователей."""
-        return await self._repo.list_paginated(
-            page=page,
-            page_size=page_size,
-            order_by=order_by,
+    async def create(self, request: api.CreateUserAPIRequest) -> api.CreateUserAPIResponse:
+        check_user = await self._repo.read_by_username(
+            query=request.migrate(repo.ReadUserByUsernameRepoQuery)
         )
+        if check_user:
+            raise ConflictError(
+                message="Пользователь с таким именем уже существует",
+                details={"username": request.username},
+            )
 
-    async def list_cursor(
-        self,
-        cursor: str | None = None,
-        limit: int = 50,
-    ) -> dict[str, Any]:
-        """Получить список пользователей с cursor-based пагинацией."""
-        return await self._repo.list_cursor(cursor=cursor, limit=limit)
+        check_user = await self._repo.read_by_email(
+            query=request.migrate(repo.ReadUserByEmailRepoQuery)
+        )
+        if check_user:
+            raise ConflictError(
+                message="Пользователь с таким email уже существует",
+                details={"email": request.email},
+            )
 
+        request.password = hash_password(request.password)
+        user = await self._repo.create(request.migrate(repo.CreateUserRepoCommand))
+        return user.migrate(api.CreateUserAPIResponse)

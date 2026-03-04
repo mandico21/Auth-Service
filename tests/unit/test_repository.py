@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from app.internal.repository.postgres.user import UserRepository
+from app.internal.repository.postgres.user2 import UserRepository
 from app.pkg.models.base import DependencyError
 
 

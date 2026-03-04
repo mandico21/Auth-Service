@@ -46,32 +46,38 @@ class AppError(Exception):
 # ── Частые прикладные ошибки ────────────────────────────────────────────────
 
 class BadRequestError(AppError):
+    """Неверный запрос (например, при синтаксической ошибке в JSON или при отсутствии обязательных полей)."""
     http_status = HTTPStatus.BAD_REQUEST
     message = "Bad request"
 
 
 class UnauthorizedError(AppError):
+    """Ошибка аутентификации (например, при отсутствии или недействительном токене доступа)."""
     http_status = HTTPStatus.UNAUTHORIZED
     message = "Unauthorized"
 
 
 class ForbiddenError(AppError):
+    """Доступ запрещён (например, при отсутствии прав на ресурс)."""
     http_status = HTTPStatus.FORBIDDEN
     message = "Forbidden"
 
 
 class NotFoundError(AppError):
+    """Ресурс не найден. (Например, при запросе несуществующего объекта по ID)."""
     code = "NOT_FOUND"
     http_status = HTTPStatus.NOT_FOUND
     message = "Resource not found"
 
 
 class ConflictError(AppError):
+    """Конфликт данных (например, при попытке создать ресурс с уже существующим уникальным полем)."""
     http_status = HTTPStatus.CONFLICT
     message = "Conflict"
 
 
 class UnprocessableEntityError(AppError):
+    """Невозможно обработать запрос (например, при нарушении бизнес-правил, даже если синтаксис запроса верный)."""
     http_status = HTTPStatus.UNPROCESSABLE_ENTITY
     message = "Unprocessable entity"
 

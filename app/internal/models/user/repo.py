@@ -1,8 +1,14 @@
-"""Response модели для User API."""
+__all__ = [
+    "CreateUserRepoCommand",
+    "ReadUserByUsernameRepoQuery",
+    "ReadUserByEmailRepoQuery",
+    "UserRepoResponse",
+]
 
 from datetime import datetime
 from uuid import UUID
 
+from app.internal.models.user import UserFields, BaseUser
 from app.pkg.models.base import BaseModel
 
 
@@ -24,3 +30,40 @@ class UserListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+# COMMAND
+class CreateUserRepoCommand(BaseUser):
+    """Команда для создания пользователя."""
+
+    first_name: UserFields.first_name
+    last_name: UserFields.last_name
+    username: UserFields.username
+    email: UserFields.email
+    password: UserFields.password
+
+
+# QUERY
+class ReadUserByUsernameRepoQuery(BaseUser):
+    """Запрос для получения пользователя по имени пользователя."""
+
+    username: UserFields.username
+
+
+class ReadUserByEmailRepoQuery(BaseModel):
+    """Модель ответа для запроса получения пользователя по имени пользователя."""
+
+    email: UserFields.email
+
+
+# RESPONSE
+class UserRepoResponse(BaseUser):
+    """Модель ответа для репозитория пользователя."""
+
+    id: UserFields.id
+    first_name: UserFields.first_name
+    last_name: UserFields.last_name
+    username: UserFields.username
+    email: UserFields.email
+    created_at: UserFields.created_at
+    updated_at: UserFields.updated_at

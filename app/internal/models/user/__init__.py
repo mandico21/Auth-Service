@@ -1,13 +1,21 @@
-__all__ = ["UserFields"]
+__all__ = ["UserFields", "BaseUser"]
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from pydantic import Field
 
+from app.pkg.models.base import BaseModel
+
+
+class BaseUser(BaseModel):
+    """Базовая модель для всех моделей пользователя."""
+
 
 class UserFields:
     id = Annotated[UUID, Field(description="ID пользователя")]
+    name = Annotated[UUID, Field(description="ID пользователя")]
     first_name = Annotated[str, Field(
         description="Имя пользователя", max_length=50, examples=["Иван"]
     )]
@@ -29,10 +37,9 @@ class UserFields:
         description="Является ли пользователь суперпользователем", examples=[False]
     )]
 
-    created_at = Annotated[str, Field(
-        description="Дата и время создания пользователя", examples=["2022-01-01T00:00:00Z"]
+    created_at = Annotated[datetime, Field(
+        description="Дата и время создания пользователя"
     )]
-    updated_at = Annotated[str, Field(
-        description="Дата и время последнего обновления пользователя",
-        examples=["2022-01-01T00:00:00Z"]
+    updated_at = Annotated[datetime, Field(
+        description="Дата и время последнего обновления пользователя"
     )]

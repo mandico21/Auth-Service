@@ -30,3 +30,10 @@ class ServiceUnavailableError(AppError):
 
     http_status = HTTPStatus.SERVICE_UNAVAILABLE
     message = "Сервис временно недоступен"
+
+
+class InternalServerError(AppError):
+    """Внутренняя ошибка сервера."""
+
+    http_status = HTTPStatus.INTERNAL_SERVER_ERROR
+    message = "Внутренняя ошибка сервера"
