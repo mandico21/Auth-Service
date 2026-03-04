@@ -34,6 +34,15 @@ class APISettings(_Settings):
     REQUEST_TIMEOUT: int = Field(default=30, ge=1, description="Request timeout in seconds")
     GRACEFUL_SHUTDOWN_TIMEOUT: int = Field(default=30, ge=1, description="Graceful shutdown timeout")
 
+    # CORS
+    CORS_ORIGINS: list[str] = Field(
+        default=["*"],
+        description="Allowed CORS origins. Use specific domains in production.",
+    )
+
+    # Docs (отключать в production)
+    DOCS_ENABLED: bool = Field(default=True, description="Enable Swagger/ReDoc UI")
+
     # Rate limiting (optional, for future use)
     RATE_LIMIT_ENABLED: bool = False
     RATE_LIMIT_REQUESTS: int = 100

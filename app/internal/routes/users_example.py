@@ -6,7 +6,8 @@ from uuid import UUID
 from dishka import FromDishka
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.internal.models.user.repository import UserListResponse, UserResponse
+from app.internal.models.user.api import CreateUserRequest
+from app.internal.models.user.repo import UserListResponse, UserResponse
 from app.internal.repository.postgres import UserRepository
 from app.pkg.models.base import NotFoundError
 
@@ -73,12 +74,11 @@ async def get_user(
     description="Создаёт нового пользователя",
 )
 async def create_user(
-    email: str,
-    name: str,
+    body: CreateUserRequest,
     user_repo: Annotated[UserRepository, FromDishka()],
 ) -> UserResponse:
     """Создать нового пользователя."""
-    user = await user_repo.create(email=email, name=name)
+    user = await user_repo.create(email=body.email, name=body.name)
     return UserResponse(**user)
 
 

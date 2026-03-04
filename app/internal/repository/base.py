@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -99,6 +100,16 @@ class BaseRepository(ABC, Generic[T]):
     @abstractmethod
     def table_name(self) -> str:
         """Возвращает имя таблицы в БД."""
+
+    @staticmethod
+    def _validate_identifier(name: str) -> str:
+        """
+        Валидация SQL идентификатора (имя колонки/таблицы).
+        Защита от SQL injection при динамическом построении запросов.
+        """
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
+            raise ValueError(f"Недопустимое имя SQL идентификатора: {name!r}")
+        return name
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[AsyncConnection]:
@@ -238,8 +249,8 @@ class BaseRepository(ABC, Generic[T]):
         if not records:
             return 0
 
-        # Получаем поля из первой записи
-        fields = list(records[0].keys())
+        # Получаем поля из первой записи и валидируем имена
+        fields = [self._validate_identifier(f) for f in records[0].keys()]
         placeholders = ", ".join([f"%({field})s" for field in fields])
         fields_str = ", ".join(fields)
 
@@ -294,6 +305,8 @@ class BaseRepository(ABC, Generic[T]):
         """
         Проверить существование записи.
 
+        Использует SELECT EXISTS для раннего выхода (не сканирует все строки).
+
         Аргументы:
             where: WHERE условие (без WHERE)
             params: Параметры для WHERE
@@ -302,6 +315,7 @@ class BaseRepository(ABC, Generic[T]):
         Возвращает:
             True если запись существует
         """
-        count = await self.count(where, params, conn)
-        return count > 0
+        query = f"SELECT EXISTS(SELECT 1 FROM {self.table_name} WHERE {where})"
+        result = await self.fetch_val(query, params, conn)
+        return bool(result)
 

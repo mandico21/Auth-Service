@@ -100,8 +100,8 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title=settings.API.INSTANCE_APP_NAME,
         debug=settings.API.DEBUG,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.API.DOCS_ENABLED else None,
+        redoc_url="/redoc" if settings.API.DOCS_ENABLED else None,
         lifespan=lifespan,
     )
     application.state.dishka_container = container
@@ -114,7 +114,7 @@ def create_app() -> FastAPI:
     # 1. CORS (внешний слой)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Настроить для production
+        allow_origins=settings.API.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

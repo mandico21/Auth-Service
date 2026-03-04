@@ -89,12 +89,15 @@ class PostgresConnector(BaseConnector[AsyncConnection]):
 
     async def healthcheck(self) -> bool:
         """
-        Quick health check - executes SELECT 1.
+        Quick health check via pool.check().
+        Uses pool's internal mechanism instead of acquiring a working connection,
+        avoiding competition with business queries under high load.
         Returns False on any error without raising.
         """
         try:
-            async with self.connect() as conn:
-                await conn.execute("SELECT 1;")
+            if self._pool is None:
+                return False
+            await self._pool.check()
             return True
         except Exception:
             return False
@@ -104,8 +107,9 @@ class PostgresConnector(BaseConnector[AsyncConnection]):
         """Return pool statistics for monitoring."""
         if self._pool is None:
             return {"status": "not_started"}
+        stats = self._pool.get_stats()
         return {
-            "size": self._pool.get_stats().get("pool_size", 0),
-            "available": self._pool.get_stats().get("pool_available", 0),
-            "waiting": self._pool.get_stats().get("requests_waiting", 0),
+            "size": stats.get("pool_size", 0),
+            "available": stats.get("pool_available", 0),
+            "waiting": stats.get("requests_waiting", 0),
         }

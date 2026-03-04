@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,6 +16,19 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: pattern-service-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build:
       context: .
@@ -26,6 +37,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       API__DEBUG: "true"
       API__INSTANCE_APP_NAME: pattern-service
@@ -33,6 +46,7 @@ services:
       API__PORT: 8000
       API__WORKERS: 4
       API__REQUEST_TIMEOUT: 30
+      API__DOCS_ENABLED: "true"
 
       POSTGRES__HOST: postgres
       POSTGRES__PORT: 5432
@@ -43,6 +57,9 @@ services:
       POSTGRES__MAX_CONNECTION: 10
       POSTGRES__TIMEOUT: 5
       POSTGRES__STATEMENT_TIMEOUT: 25000
+
+      REDIS__ENABLED: "true"
+      REDIS__URL: "redis://redis:6379/0"
     ports:
       - "8000:8000"
     volumes:
@@ -87,6 +104,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   prometheus_data:
   grafana_data:
 

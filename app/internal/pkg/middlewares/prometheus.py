@@ -40,7 +40,8 @@ def _get_path_template(request: Request) -> str:
         route = request.scope["route"]
         if hasattr(route, "path"):
             return route.path
-    return request.url.path
+    # Fallback: нормализуем путь, чтобы UUID/числовые ID не создавали уникальные метки
+    return "/unknown"
 
 
 class PrometheusMiddleware(BaseHTTPMiddleware):

@@ -68,7 +68,13 @@ class UserRepository(BaseRepository):
         if not fields:
             return await self.get_by_id(user_id)
 
-        set_clause = ", ".join(f"{k} = %s" for k in fields.keys())
+        # Валидация имён полей через whitelist
+        allowed_fields = {"email", "name"}
+        invalid = set(fields.keys()) - allowed_fields
+        if invalid:
+            raise ValueError(f"Недопустимые поля для обновления: {invalid}")
+
+        set_clause = ", ".join(f"{self._validate_identifier(k)} = %s" for k in fields.keys())
         query = f"""
             UPDATE users
             SET {set_clause}, updated_at = NOW()
@@ -134,6 +140,9 @@ class UserRepository(BaseRepository):
         """
         Получить пагинированный список пользователей с метаданными.
 
+        Использует оконную функцию COUNT(*) OVER() для получения total
+        в одном запросе (1 соединение вместо 2).
+
         Возвращает:
             {
                 "items": [...],
@@ -148,13 +157,33 @@ class UserRepository(BaseRepository):
         page_size = min(max(1, page_size), 1000)  # Максимум 1000 записей
         offset = (page - 1) * page_size
 
-        # Получаем общее количество и данные параллельно
-        import asyncio
+        # Безопасная валидация order_by (защита от SQL injection)
+        allowed_fields = {"created_at", "updated_at", "email", "name"}
+        allowed_directions = {"ASC", "DESC"}
 
-        total, items = await asyncio.gather(
-            self.count(),
-            self.list_all(limit=page_size, offset=offset, order_by=order_by),
-        )
+        parts = order_by.split()
+        if len(parts) == 2:
+            field, direction = parts
+            if field in allowed_fields and direction.upper() in allowed_directions:
+                order_clause = f"{field} {direction.upper()}"
+            else:
+                order_clause = "created_at DESC"
+        else:
+            order_clause = "created_at DESC"
+
+        # Одна оконная функция = 1 соединение из пула вместо 2
+        query = f"""
+            SELECT id, email, name, created_at, updated_at,
+                   COUNT(*) OVER() AS total_count
+            FROM users
+            ORDER BY {order_clause}
+            LIMIT %s OFFSET %s
+        """
+        rows = await self.fetch_all(query, (page_size, offset))
+
+        total = rows[0]["total_count"] if rows else await self.count()
+        # Убираем служебное поле из результатов
+        items = [{k: v for k, v in row.items() if k != "total_count"} for row in rows]
 
         pages = (total + page_size - 1) // page_size if total > 0 else 0
 
