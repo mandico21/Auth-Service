@@ -20,7 +20,6 @@ def get_current_user_id(
 ) -> UUID:
     """
     FastAPI Dependency: извлекает и верифицирует Bearer access token из заголовка Authorization.
-
     Returns:
         UUID пользователя из токена.
 
@@ -30,8 +29,8 @@ def get_current_user_id(
     if not credentials:
         raise UnauthorizedError(message="Отсутствует токен авторизации")
 
-    settings = get_settings()
-    payload = decode_token(credentials.credentials, settings.JWT)
+    jwt_settings = get_settings().JWT
+    payload = decode_token(credentials.credentials, jwt_settings)
 
     if payload.get("type") != "access":
         raise UnauthorizedError(message="Ожидался access token")
@@ -48,4 +47,3 @@ def get_current_user_id(
 
 # Удобный алиас для использования в роутерах
 CurrentUserID = Annotated[UUID, Depends(get_current_user_id)]
-

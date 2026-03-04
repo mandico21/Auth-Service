@@ -12,6 +12,7 @@ from app.internal.models.user.api import (
     UserAPIResponse,
     ReadUserByUsernameAPIRequest,
 )
+from app.internal.pkg.middlewares.auth import CurrentUserID
 from app.internal.service.user import UserService
 
 router = APIRouter(route_class=DishkaRoute)
@@ -25,6 +26,7 @@ router = APIRouter(route_class=DishkaRoute)
     description="Регистрирует нового пользователя. Пароль хешируется через Argon2id.",
     responses={
         201: {"description": "Пользователь успешно создан"},
+        401: {"description": "Не авторизован"},
         409: {"description": "Пользователь с таким username или email уже существует"},
         422: {"description": "Ошибка валидации входных данных"},
     },
@@ -34,6 +36,7 @@ async def create_user(
     request: Request,
     response: Response,
     service: Annotated[UserService, FromDishka()],
+    _: CurrentUserID,
 ) -> CreateUserAPIResponse:
     user = await service.create(body)
     response.headers["Location"] = str(
@@ -49,12 +52,14 @@ async def create_user(
     summary="Получить пользователя по username",
     responses={
         200: {"description": "Данные пользователя"},
+        401: {"description": "Не авторизован"},
         404: {"description": "Пользователь не найден"},
     },
 )
 async def get_user_by_username(
     username: str,
     service: Annotated[UserService, FromDishka()],
+    _: CurrentUserID,
 ) -> UserAPIResponse:
     """Получить пользователя по его username."""
     return await service.read_by_username(ReadUserByUsernameAPIRequest(username=username))
