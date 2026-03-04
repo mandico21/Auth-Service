@@ -36,6 +36,20 @@ class UserRepo(BaseRepository):
         return res
 
     @collect_response
+    async def read_by_username_with_password(
+        self,
+        query: repo.ReadUserByUsernameRepoQuery
+    ) -> repo.UserWithPasswordRepoResponse | None:
+        """Получить пользователя вместе с хешем пароля (только для аутентификации)."""
+        sql = """
+              select id, username, email, first_name, last_name, password, created_at, updated_at
+              from users
+              where username = %(username)s \
+              """
+        res = await self.fetch_one(sql, query.to_dict())
+        return res
+
+    @collect_response
     async def read_by_email(
         self,
         query: repo.ReadUserByEmailRepoQuery

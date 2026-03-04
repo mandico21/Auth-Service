@@ -139,6 +139,21 @@ class RedisSettings(_Settings):
     DECODE_RESPONSES: bool = True
 
 
+class JWTSettings(_Settings):
+    """Настройки JWT токенов."""
+
+    SECRET_KEY: SecretStr = Field(
+        description="Секретный ключ для подписи JWT токенов"
+    )
+    ALGORITHM: str = Field(default="HS256", description="Алгоритм подписи JWT")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=15, ge=1, description="Срок жизни access token в минутах"
+    )
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
+        default=30, ge=1, description="Срок жизни refresh token в днях"
+    )
+
+
 class Settings(_Settings):
     """
     Корень конфигурации. Читает .env один раз (см. lru_cache ниже).
@@ -150,6 +165,7 @@ class Settings(_Settings):
     API: APISettings = APISettings()
     POSTGRES: PostgresSettings
     REDIS: RedisSettings = Field(default_factory=RedisSettings)
+    JWT: JWTSettings = Field(default_factory=JWTSettings)
 
 
 @lru_cache()

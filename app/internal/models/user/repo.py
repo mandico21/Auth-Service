@@ -3,6 +3,7 @@ __all__ = [
     "ReadUserByUsernameRepoQuery",
     "ReadUserByEmailRepoQuery",
     "UserRepoResponse",
+    "UserWithPasswordRepoResponse",
 ]
 
 from datetime import datetime
@@ -67,3 +68,17 @@ class UserRepoResponse(BaseUser):
     email: UserFields.email
     created_at: UserFields.created_at
     updated_at: UserFields.updated_at
+
+
+class UserWithPasswordRepoResponse(BaseUser):
+    """Модель ответа для репозитория с хешем пароля (только для аутентификации)."""
+
+    id: UserFields.id
+    first_name: UserFields.first_name
+    last_name: UserFields.last_name
+    username: UserFields.username
+    email: UserFields.email
+    password: UserFields.password
+    created_at: UserFields.created_at
+    updated_at: UserFields.updated_at
+

@@ -1,13 +1,26 @@
 from app.internal.models.user import api, repo
 from app.internal.repository.postgres import UserRepo
-from app.internal.service.helpers import hash_password
-from app.pkg.models.base import NotFoundError, ConflictError
+from app.internal.service.helpers import hash_password, verify_password
+from app.pkg.models.base import NotFoundError, ConflictError, UnauthorizedError
 
 
 class UserService:
 
     def __init__(self, user_repo: UserRepo):
         self._repo = user_repo
+
+    async def authenticate(self, username: str, password: str) -> api.UserAPIResponse:
+        """Проверить учётные данные и вернуть пользователя.
+
+        Raises:
+            UnauthorizedError: если пользователь не найден или пароль неверный.
+        """
+        user = await self._repo.read_by_username_with_password(
+            query=repo.ReadUserByUsernameRepoQuery(username=username)
+        )
+        if not user or not verify_password(user.password, password):
+            raise UnauthorizedError(message="Неверное имя пользователя или пароль")
+        return user.migrate(api.UserAPIResponse)
 
     async def read_by_username(
         self,
