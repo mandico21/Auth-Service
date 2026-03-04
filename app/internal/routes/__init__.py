@@ -23,6 +23,8 @@ def register_routes(app: "FastAPI") -> None:
     """
     from app.internal.routes.auth import router as auth_router
     from app.internal.routes.users import router as users_router
+    from app.internal.routes.permissions import router as permissions_router
 
     app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(users_router, prefix="/api/v1/users", tags=["users"])
+    app.include_router(permissions_router, prefix="/api/v1/permissions", tags=["permissions"])

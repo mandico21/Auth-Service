@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dishka import Provider, Scope, provide
 
-from app.internal.repository.postgres import UserRepo, RefreshTokenRepo
+from app.internal.repository.postgres import UserRepo, RefreshTokenRepo, PermissionRepo
 from app.internal.repository.redis import RefreshTokenRedisRepo
 from app.pkg.connectors.postgres import PostgresConnector
 from app.pkg.connectors.redis import RedisConnector
@@ -28,4 +28,9 @@ class RepositoryProvider(Provider):
     def refresh_token_redis_repo(self, connector: RedisConnector) -> RefreshTokenRedisRepo:
         """Предоставляет RefreshTokenRedisRepo (Redis) для скоупа запроса."""
         return RefreshTokenRedisRepo(connector=connector)
+
+    @provide
+    def permission_repo(self, connector: PostgresConnector) -> PermissionRepo:
+        """Предоставляет PermissionRepo для скоупа запроса."""
+        return PermissionRepo(connector=connector)
 

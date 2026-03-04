@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dishka import Provider, Scope, provide
 
-from app.internal.repository.postgres import UserRepo, RefreshTokenRepo
+from app.internal.repository.postgres import UserRepo, RefreshTokenRepo, PermissionRepo
 from app.internal.repository.redis import RefreshTokenRedisRepo
 from app.internal.service import UserService
 from app.internal.service.token import TokenService
+from app.internal.service.permission import PermissionService
 from app.pkg.settings import Settings
 
 
@@ -35,4 +36,9 @@ class ServiceProvider(Provider):
             refresh_token_redis_repo=refresh_token_redis_repo,
             jwt_settings=settings.JWT,
         )
+
+    @provide
+    def permission_service(self, permission_repo: PermissionRepo) -> PermissionService:
+        """Предоставляет PermissionService для скоупа запроса."""
+        return PermissionService(permission_repo=permission_repo)
 
