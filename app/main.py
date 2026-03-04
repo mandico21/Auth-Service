@@ -10,7 +10,9 @@ from typing import Annotated
 from dishka import FromDishka, make_async_container
 from dishka.integrations.fastapi import DishkaRoute, setup_dishka
 from fastapi import FastAPI
+from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordBearer
 from starlette.middleware.cors import CORSMiddleware
 
 from app.configuration.providers import (
@@ -105,6 +107,11 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.API.DOCS_ENABLED else None,
         redoc_url="/redoc" if settings.API.DOCS_ENABLED else None,
         lifespan=lifespan,
+        swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect",
+        swagger_ui_init_oauth={
+            "usePkceWithAuthorizationCodeGrant": False,
+            "clientId": "",
+        },
     )
     application.state.dishka_container = container
 
