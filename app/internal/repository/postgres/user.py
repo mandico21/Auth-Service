@@ -61,10 +61,6 @@ class UserRepository(BaseRepository):
     async def create(self, email: str, name: str) -> dict:
         """
         Создать нового пользователя и вернуть созданную запись.
-
-        Без @with_retry: INSERT не идемпотентен, повтор может создать дубликат
-        (если ошибка произошла после INSERT, но до получения ответа).
-        UniqueViolation обрабатывается на уровне сервиса.
         """
         query = """
             INSERT INTO users (email, name)
