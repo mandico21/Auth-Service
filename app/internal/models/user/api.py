@@ -7,8 +7,8 @@ from app.pkg.models.types import NotEmptyStr
 class CreateUserRequest(BaseModel):
     """Запрос на создание пользователя."""
 
-    email: UserFields.Email
-    name: UserFields.Name
+    email: UserFields.email
+    name: UserFields.name
 
 
 class UpdateUserRequest(BaseModel):
