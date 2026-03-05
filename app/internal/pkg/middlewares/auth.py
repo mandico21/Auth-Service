@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 
+from app.internal.repository.redis import AccessTokenRedisRepo
 from app.internal.service.helpers.jwt import decode_token
 from app.pkg.models.base import UnauthorizedError
 from app.pkg.settings import get_settings
@@ -19,22 +20,12 @@ _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_current_user_id(
+async def get_current_user_id(
+    request: Request,
     oauth2_token: Annotated[str | None, Depends(_oauth2_scheme)],
     bearer_creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> UUID:
-    """
-    FastAPI Dependency: извлекает и верифицирует Bearer access token.
-    Принимает токен из двух источников (любой из двух):
-      - OAuth2 Password flow (кнопка Authorize → username/password в Swagger)
-      - Прямой Bearer заголовок (Authorization: Bearer <token>)
-
-    Returns:
-        UUID пользователя из токена.
-
-    Raises:
-        UnauthorizedError: если токен отсутствует, невалидный или истёк.
-    """
+    """Извлекает и верифицирует Bearer access token. Проверяет blocklist Redis."""
     token = oauth2_token or (bearer_creds.credentials if bearer_creds else None)
 
     if not token:
@@ -49,6 +40,13 @@ def get_current_user_id(
     sub = payload.get("sub")
     if not sub:
         raise UnauthorizedError(message="Невалидный payload токена")
+
+    jti = payload.get("jti")
+    if jti:
+        container = request.state.dishka_container
+        access_token_repo: AccessTokenRedisRepo = await container.get(AccessTokenRedisRepo)
+        if await access_token_repo.is_blocked(jti):
+            raise UnauthorizedError(message="Токен отозван")
 
     try:
         return UUID(sub)

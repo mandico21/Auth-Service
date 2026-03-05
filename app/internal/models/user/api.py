@@ -5,6 +5,11 @@ __all__ = [
     "ReadUserByEmailAPIRequest",
     "UserAPIResponse",
     "MeAPIResponse",
+    "ChangePasswordAPIRequest",
+    "ResetPasswordAPIRequest",
+    "UpdateProfileAPIRequest",
+    "UpdateProfileAPIResponse",
+    "UpdateUserStatusAPIRequest",
 ]
 
 from app.internal.models.permissions.api import PermissionAPIResponse
@@ -88,4 +93,51 @@ class MeAPIResponse(BaseUser):
     permissions: list[PermissionAPIResponse]
     created_at: UserFields.created_at
     updated_at: UserFields.updated_at
+
+
+# ── Смена / сброс пароля ────────────────────────────────────────────────────
+
+class ChangePasswordAPIRequest(BaseUser):
+    """Запрос на смену пароля — текущий и новый пароль."""
+
+    current_password: UserFields.password
+    new_password: UserFields.password
+
+
+class ResetPasswordAPIRequest(BaseUser):
+    """Запрос на принудительный сброс пароля (только для администраторов)."""
+
+    new_password: UserFields.password
+
+
+# ── Обновление профиля ──────────────────────────────────────────────────────
+
+class UpdateProfileAPIRequest(BaseUser):
+    """Запрос на обновление профиля: имя и/или email."""
+
+    first_name: UserFields.first_name | None = None
+    last_name: UserFields.last_name | None = None
+    email: UserFields.email | None = None
+
+
+class UpdateProfileAPIResponse(BaseUser):
+    """Ответ после успешного обновления профиля."""
+
+    id: UserFields.id
+    first_name: UserFields.first_name
+    last_name: UserFields.last_name
+    username: UserFields.username
+    email: UserFields.email
+    is_active: UserFields.is_active
+    is_superuser: UserFields.is_superuser
+    created_at: UserFields.created_at
+    updated_at: UserFields.updated_at
+
+
+# ── Управление статусом ─────────────────────────────────────────────────────
+
+class UpdateUserStatusAPIRequest(BaseUser):
+    """Запрос на изменение статуса пользователя (activate / deactivate)."""
+
+    is_active: UserFields.is_active
 

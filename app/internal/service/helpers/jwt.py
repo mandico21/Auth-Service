@@ -18,26 +18,27 @@ def _utcnow() -> datetime:
 def create_access_token(
     user_id: str,
     settings: JWTSettings,
-) -> tuple[str, datetime]:
+) -> tuple[str, datetime, str]:
     """Создать access JWT токен.
 
     Returns:
-        (encoded_token, expires_at)
+        (encoded_token, expires_at, jti)
     """
+    jti = str(uuid4())
     expires_at = _utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
         "type": "access",
         "exp": expires_at,
         "iat": _utcnow(),
-        "jti": str(uuid4()),
+        "jti": jti,
     }
     token = jwt.encode(
         payload,
         settings.SECRET_KEY.get_secret_value(),
         algorithm=settings.ALGORITHM,
     )
-    return token, expires_at
+    return token, expires_at, jti
 
 
 def create_refresh_token(

@@ -74,3 +74,54 @@ class UserRepo(BaseRepository):
               where email = %(email)s \
               """
         return await self.fetch_one(sql, query.to_dict())
+
+    @collect_response
+    async def update_password(
+        self,
+        cmd: repo.UpdatePasswordRepoCommand,
+    ) -> repo.UserRepoResponse | None:
+        """Обновить хеш пароля пользователя."""
+        sql = """
+              update users
+              set password   = %(password)s,
+                  updated_at = now()
+              where id = %(id)s
+              returning id, username, email, first_name, last_name,
+                        is_active, is_superuser, created_at, updated_at \
+              """
+        return await self.fetch_one(sql, cmd.to_dict())
+
+    @collect_response
+    async def update_profile(
+        self,
+        cmd: repo.UpdateProfileRepoCommand,
+    ) -> repo.UserRepoResponse | None:
+        """Обновить профиль пользователя (first_name, last_name, email)."""
+        sql = """
+              update users
+              set first_name = coalesce(%(first_name)s, first_name),
+                  last_name  = coalesce(%(last_name)s,  last_name),
+                  email      = coalesce(%(email)s,      email),
+                  updated_at = now()
+              where id = %(id)s
+              returning id, username, email, first_name, last_name,
+                        is_active, is_superuser, created_at, updated_at \
+              """
+        return await self.fetch_one(sql, cmd.to_dict())
+
+    @collect_response
+    async def update_status(
+        self,
+        cmd: repo.UpdateUserStatusRepoCommand,
+    ) -> repo.UserRepoResponse | None:
+        """Активировать или деактивировать пользователя."""
+        sql = """
+              update users
+              set is_active  = %(is_active)s,
+                  updated_at = now()
+              where id = %(id)s
+              returning id, username, email, first_name, last_name,
+                        is_active, is_superuser, created_at, updated_at \
+              """
+        return await self.fetch_one(sql, cmd.to_dict())
+

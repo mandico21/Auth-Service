@@ -42,3 +42,18 @@ class RefreshTokenRedisRepo:
         async with self._connector.connect() as client:
             await client.delete(f"{_PREFIX}{jti}")
 
+    async def delete_all_for_user(self, user_id: str) -> None:
+        """Удалить все jti, принадлежащие пользователю (logout со всех устройств).
+
+        Перебирает ключи через SCAN и удаляет те, у которых значение == user_id.
+        """
+        async with self._connector.connect() as client:
+            keys_to_delete: list[str] = []
+            async for key in client.scan_iter(f"{_PREFIX}*"):
+                value = await client.get(key)
+                if value == user_id:
+                    keys_to_delete.append(key)
+            if keys_to_delete:
+                await client.delete(*keys_to_delete)
+
+

@@ -4,7 +4,7 @@ from app.internal.models.user import api, repo
 from app.internal.repository.postgres import UserRepo
 from app.internal.service.helpers import hash_password, verify_password
 from app.internal.service.permission import PermissionChecker
-from app.pkg.models.base import NotFoundError, ConflictError, UnauthorizedError
+from app.pkg.models.base import NotFoundError, ConflictError, UnauthorizedError, ForbiddenError
 
 
 class UserService:
@@ -81,3 +81,132 @@ class UserService:
     async def delete(self, user_id: UUID, actor_id: UUID) -> None:
         """Удалить пользователя. Требует права delete_user."""
         await self._perm.require(actor_id, "delete_user")
+
+    # ── Смена пароля ────────────────────────────────────────────────────────
+
+    async def change_password(
+        self,
+        user_id: UUID,
+        request: api.ChangePasswordAPIRequest,
+    ) -> None:
+        """Сменить пароль текущего пользователя.
+
+        Проверяет текущий пароль перед заменой.
+
+        Raises:
+            UnauthorizedError: если текущий пароль неверный.
+            NotFoundError: если пользователь не найден.
+        """
+        user = await self._repo.read_by_id(
+            query=repo.ReadUserByIdRepoQuery(id=user_id)
+        )
+        if not user:
+            raise NotFoundError(message="Пользователь не найден")
+
+        # Нужен хеш — читаем через специальный метод
+        user_with_pwd = await self._repo.read_by_username_with_password(
+            query=repo.ReadUserByUsernameRepoQuery(username=user.username)
+        )
+        if not user_with_pwd or not verify_password(user_with_pwd.password, request.current_password):
+            raise UnauthorizedError(message="Текущий пароль указан неверно")
+
+        new_hash = hash_password(request.new_password)
+        await self._repo.update_password(
+            cmd=repo.UpdatePasswordRepoCommand(id=user_id, password=new_hash)
+        )
+
+    # ── Сброс пароля (admin) ─────────────────────────────────────────────────
+
+    async def reset_password(
+        self,
+        target_user_id: UUID,
+        actor_id: UUID,
+        request: api.ResetPasswordAPIRequest,
+    ) -> None:
+        """Принудительно сбросить пароль пользователя.
+
+        Только для пользователей с правом ``manage_users``.
+
+        Raises:
+            ForbiddenError: если актор не имеет нужного разрешения.
+            NotFoundError: если целевой пользователь не найден.
+        """
+        await self._perm.require(actor_id, "manage_users")
+
+        user = await self._repo.read_by_id(
+            query=repo.ReadUserByIdRepoQuery(id=target_user_id)
+        )
+        if not user:
+            raise NotFoundError(message="Пользователь не найден")
+
+        new_hash = hash_password(request.new_password)
+        await self._repo.update_password(
+            cmd=repo.UpdatePasswordRepoCommand(id=target_user_id, password=new_hash)
+        )
+
+    # ── Обновление профиля ───────────────────────────────────────────────────
+
+    async def update_profile(
+        self,
+        user_id: UUID,
+        request: api.UpdateProfileAPIRequest,
+    ) -> api.UpdateProfileAPIResponse:
+        """Обновить профиль текущего пользователя (имя, фамилия, email).
+
+        Raises:
+            NotFoundError: если пользователь не найден.
+            ConflictError: если новый email уже занят другим пользователем.
+        """
+        if request.email:
+            existing = await self._repo.read_by_email(
+                query=repo.ReadUserByEmailRepoQuery(email=request.email)
+            )
+            if existing and existing.id != user_id:
+                raise ConflictError(
+                    message="Пользователь с таким email уже существует",
+                    details={"email": request.email},
+                )
+
+        updated = await self._repo.update_profile(
+            cmd=repo.UpdateProfileRepoCommand(
+                id=user_id,
+                first_name=request.first_name,
+                last_name=request.last_name,
+                email=request.email,
+            )
+        )
+        if not updated:
+            raise NotFoundError(message="Пользователь не найден")
+
+        return updated.migrate(api.UpdateProfileAPIResponse)
+
+    # ── Управление статусом (admin) ──────────────────────────────────────────
+
+    async def set_active_status(
+        self,
+        target_user_id: UUID,
+        actor_id: UUID,
+        request: api.UpdateUserStatusAPIRequest,
+    ) -> api.UpdateProfileAPIResponse:
+        """Активировать или деактивировать учётную запись пользователя.
+
+        Только для пользователей с правом ``manage_users``.
+
+        Raises:
+            ForbiddenError: если актор не имеет нужного разрешения.
+            NotFoundError: если целевой пользователь не найден.
+        """
+        await self._perm.require(actor_id, "manage_users")
+
+        updated = await self._repo.update_status(
+            cmd=repo.UpdateUserStatusRepoCommand(
+                id=target_user_id,
+                is_active=request.is_active,
+            )
+        )
+        if not updated:
+            raise NotFoundError(message="Пользователь не найден")
+
+        return updated.migrate(api.UpdateProfileAPIResponse)
+
+

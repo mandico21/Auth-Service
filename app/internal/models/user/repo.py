@@ -5,6 +5,9 @@ __all__ = [
     "ReadUserByEmailRepoQuery",
     "UserRepoResponse",
     "UserWithPasswordRepoResponse",
+    "UpdatePasswordRepoCommand",
+    "UpdateProfileRepoCommand",
+    "UpdateUserStatusRepoCommand",
 ]
 
 from datetime import datetime
@@ -90,4 +93,30 @@ class UserWithPasswordRepoResponse(BaseUser):
     password: UserFields.password
     created_at: UserFields.created_at
     updated_at: UserFields.updated_at
+
+
+# COMMANDS — update
+
+class UpdatePasswordRepoCommand(BaseModel):
+    """Команда для обновления хеша пароля пользователя."""
+
+    id: UserFields.id
+    password: UserFields.password
+
+
+class UpdateProfileRepoCommand(BaseModel):
+    """Команда для обновления профиля пользователя (имя / email)."""
+
+    id: UserFields.id
+    first_name: UserFields.first_name | None = None
+    last_name: UserFields.last_name | None = None
+    email: UserFields.email | None = None
+
+
+class UpdateUserStatusRepoCommand(BaseModel):
+    """Команда для обновления статуса пользователя (is_active)."""
+
+    id: UserFields.id
+    is_active: UserFields.is_active
+
 

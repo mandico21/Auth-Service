@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from app.internal.models.token import api as token_api
 from app.internal.models.token import repo as token_repo
 from app.internal.repository.postgres import RefreshTokenRepo
-from app.internal.repository.redis import RefreshTokenRedisRepo
+from app.internal.repository.redis import RefreshTokenRedisRepo, AccessTokenRedisRepo
 from app.internal.service.helpers.jwt import (
     create_access_token,
     create_refresh_token,
@@ -32,18 +32,20 @@ class TokenService:
         user_service: UserService,
         refresh_token_repo: RefreshTokenRepo,
         refresh_token_redis_repo: RefreshTokenRedisRepo,
+        access_token_redis_repo: AccessTokenRedisRepo,
         jwt_settings: JWTSettings,
     ) -> None:
         self._user_service = user_service
         self._pg_repo = refresh_token_repo
         self._redis_repo = refresh_token_redis_repo
+        self._access_repo = access_token_redis_repo
         self._jwt = jwt_settings
 
     async def login(self, request: token_api.LoginAPIRequest) -> token_api.TokenAPIResponse:
         """Аутентифицировать пользователя и выдать пару токенов."""
         user = await self._user_service.authenticate(request.username, request.password)
 
-        access_token, _ = create_access_token(str(user.id), self._jwt)
+        access_token, access_expires_at, access_jti = create_access_token(str(user.id), self._jwt)
         refresh_token, jti, expires_at = create_refresh_token(str(user.id), self._jwt)
 
         await self._pg_repo.create(
@@ -54,6 +56,7 @@ class TokenService:
             )
         )
         await self._redis_repo.save(jti, str(user.id), _ttl_seconds(expires_at))
+        await self._access_repo.save(access_jti, str(user.id), _ttl_seconds(access_expires_at))
 
         return token_api.TokenAPIResponse(
             access_token=access_token,
@@ -83,7 +86,7 @@ class TokenService:
         await self._pg_repo.revoke(token_repo.RevokeRefreshTokenRepoCommand(jti=jti))
 
         # Выдаём новую пару
-        access_token, _ = create_access_token(user_id, self._jwt)
+        access_token, access_expires_at, access_jti = create_access_token(user_id, self._jwt)
         new_refresh_token, new_jti, expires_at = create_refresh_token(user_id, self._jwt)
 
         await self._pg_repo.create(
@@ -94,6 +97,7 @@ class TokenService:
             )
         )
         await self._redis_repo.save(new_jti, user_id, _ttl_seconds(expires_at))
+        await self._access_repo.save(access_jti, user_id, _ttl_seconds(access_expires_at))
 
         return token_api.TokenAPIResponse(
             access_token=access_token,
@@ -105,7 +109,6 @@ class TokenService:
         try:
             payload = decode_token(refresh_token, self._jwt)
         except UnauthorizedError:
-            # Токен уже недействителен — logout всё равно успешен
             return
 
         if payload.get("type") != "refresh":
@@ -117,3 +120,14 @@ class TokenService:
 
         await self._redis_repo.delete(jti)
         await self._pg_repo.revoke(token_repo.RevokeRefreshTokenRepoCommand(jti=jti))
+
+    async def revoke_all_sessions(self, user_id: str) -> None:
+        """Отозвать все активные сессии пользователя (logout со всех устройств).
+
+        - Все refresh-токены: удаляются из Redis и отзываются в PostgreSQL.
+        - Все access-токены: переносятся в blocklist до истечения их TTL.
+          После этого middleware отклонит любой запрос с таким токеном.
+        """
+        await self._redis_repo.delete_all_for_user(user_id)
+        await self._pg_repo.revoke_all_for_user(user_id)
+        await self._access_repo.block_all_for_user(user_id)

@@ -12,6 +12,7 @@ from app.internal.models.token.api import (
     RefreshTokenAPIRequest,
     TokenAPIResponse,
 )
+from app.internal.pkg.middlewares.auth import CurrentUserID
 from app.internal.service.token import TokenService
 
 router = APIRouter(route_class=DishkaRoute)
@@ -89,4 +90,25 @@ async def logout(
     service: Annotated[TokenService, FromDishka()],
 ) -> None:
     await service.logout(body.refresh_token)
+
+
+@router.post(
+    "/logout/all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Выход со всех устройств",
+    description=(
+        "Отзывает все активные refresh токены текущего пользователя. "
+        "Access токены продолжают действовать до истечения своего TTL."
+    ),
+    responses={
+        204: {"description": "Все сессии завершены"},
+        401: {"description": "Не авторизован"},
+    },
+)
+async def logout_all(
+    service: Annotated[TokenService, FromDishka()],
+    current_user_id: CurrentUserID,
+) -> None:
+    await service.revoke_all_sessions(str(current_user_id))
+
 
